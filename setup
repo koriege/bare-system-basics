@@ -1,0 +1,533 @@
+#! /usr/bin/env bash
+# (c) Konstantin Riege
+set -e
+shopt -s extglob
+trap 'trapper' INT TERM
+#trap 'kill -PIPE 0' EXIT # kills parental processes as well - shlog conflict
+#trap 'kill -PIPE -- -$$' EXIT # kill all childs - works only if $$ is process group leader
+#trap 'kill -PIPE $(jobs -p)' EXIT # same as above
+trap 'kill -PIPE $(pstree -p $$ | grep -Eo "\([0-9]+\)" | grep -Eo "[0-9]+") &> /dev/null' EXIT # parse pstree
+# AVOID DOUBLE FORKS -> run(){cmd &}; run & -> i.e. cmd gets new process group and cannot be killed
+
+trapper() {
+	[[ $* ]] && echo ":ERROR: $*" || echo ":ERROR: failed"
+	exit 1
+}
+
+############### GLOBAL VARS ###############
+
+DIR=$HOME/programs
+SOURCE=$DIR/SOURCE.me
+THREADS=$(cat /proc/cpuinfo | grep -cF processor)
+OPT='all'
+
+############### FUNCTIONS ###############
+
+usage() {
+	tools=$(grep '^TOOL=' $0 | cut -d '=' -f 2)
+cat << EOF
+DESCRIPTION
+$(basename $0) brings software locally to your linux computer
+!!! we <3 a space-free file-paths !!!
+
+VERSION
+0.1.4
+
+SYNOPSIS
+$(basename $0) -i [tool]
+
+OPTIONS
+-h | --help           # prints this message
+-d | --dir [path]     # installation path - default: $DIR
+-t | --threads [num]  # threads to use for comilation - default: $THREADS
+-i | --install [tool] # tool to install/update (see below) - default: all
+
+TOOLS
+$tools
+
+INFO
+!!! please adapt according to your installation path setting
+- to load conda with env p3pl5r3 execute 'source $DIR/conda/bin/activate p3pl5r3'
+- to load tools execute 'source $SOURCE'
+- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
+- to use tilix execute 
+	1) 'export XDG_DATA_DIRS=$DIR/tilix/latest/share'
+	2) 'export GSETTINGS_SCHEMA_DIR=$DIR/tilix/latest/share/glib-2.0/schemas/'
+	3) 'source /etc/profile.d/vte.sh'
+=> store command(s) permanent in the file $HOME/.bashrc
+- to define a tool as default application adapt 
+	~/.config/mimeapps.list
+	~/.local/share/applications/mimeapps.list
+
+REFERENCES
+(c) Konstantin Riege
+konstantin{.}riege{a}uni-jena{.}de
+konstantin{a}bioinf{.}uni-leipzig{.}de
+konstantin{.}riege{a}leibniz-fli{.}de
+EOF
+
+	exit 0
+}
+
+checkopt() {
+	case $1 in
+	-h | --h | -help | --help) usage; return 0;;
+	-t | --t | -threads | --threads) THREADS=$2;;
+	-i | --i | -install | --install) OPT=$2;;
+	-d | --d | -dir | --dir) [[ $(mkdir -p $DIR &> /dev/null; echo $?) -gt 0 ]] && echo ':ERROR: check your installation path' && return 1; DIR=$2 && SOURCE=$DIR/SOURCE.me;;
+	-*) echo ":ERROR: illegal option $1"; return 1;;
+	*) echo ":ERROR: illegal option $2"; return 1;;
+	esac
+	[[ ! $2 ]] && echo ":ERROR: argument missing for option $1" && return 1
+	[[ $2 =~ ^- ]] && echo ":ERROR: illegal argument $2 for option $1" && return 1
+
+	return 0
+}
+
+setup_cron () {
+	crontab -r &> /dev/null
+	# <minute> <hour> <day of month> <month> <day of week> <command>
+	src=$(cd $(dirname $0) && echo $PWD)
+	echo "0 0 1 * * $scriptdir/$(basename $0)" > $src/cron.jobs
+	# crontab $src/cron.jobs
+}
+#setup_cron
+
+run () {
+	# backup
+	mkdir -p $DIR/$TOOL && cd $DIR/$TOOL
+	$1 || trapper $TOOL
+	# adapt source
+	touch $SOURCE
+	if [[ ! $(grep "$DIR/$TOOL/$BIN" $SOURCE) ]]; then 
+		sed -i "/PATH=/d;" $SOURCE
+		echo 'VAR=$VAR:'"$DIR/$TOOL/$BIN" >> $SOURCE
+		echo 'PATH=$VAR:$PATH' >> $SOURCE
+	fi
+
+	return 0
+}
+
+javawrapper() {
+cat << EOF > $1 || return 1
+#!/usr/bin/env bash
+set -eu -o pipefail
+export LC_ALL=en_US.UTF-8
+java=java
+if [[ -n \$JAVA_HOME ]]; then
+    if [[ -e \$JAVA_HOME/bin/java ]]; then
+        java=\$JAVA_HOME/bin/java
+    fi
+fi
+jvm_mem_opts=""
+jvm_prop_opts=""
+pass_args=""
+for arg in \$@; do
+	case \$arg in
+		'-D'*) jvm_prop_opts="\$jvm_prop_opts \$arg";;
+		'-XX'*) jvm_prop_opts="\$jvm_prop_opts \$arg";;
+		'-Xm'*) jvm_mem_opts="\$jvm_mem_opts \$arg";;
+	esac
+done
+[[ ! \$jvm_mem_opts ]] && jvm_mem_opts="-Xms512m -Xmx1g"
+pass_arr=(\$pass_args)
+if [[ \${pass_arr[0]} == org* ]]; then
+    eval \$java \$jvm_mem_opts \$jvm_prop_opts -cp $2 \$pass_args
+else
+    eval \$java \$jvm_mem_opts \$jvm_prop_opts -jar $2 \$pass_args
+fi
+exit
+EOF
+	chmod 755 $1 || return 1
+	return 0
+}
+
+############### MAIN ###############
+
+[[ $# -eq 0 ]] && usage
+[[ $# -eq 1 ]] && [[ ! $1 =~ ^- ]] && echo ":ERROR: illegal option $1" && trapper
+for i in $(seq 1 $#); do
+	if [[ ${!i} =~ ^- ]]; then
+		[[ i -lt $# ]] && j=$((i+1))
+		checkopt "${!i}" "${!j}" || trapper
+	else
+		((++i))
+	fi
+done
+
+TOOL=google-chrome         # google chrome webbrowser
+install_google-chrome () {
+	{	url='https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb' && \
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		version=$(opt/google/chrome/google-chrome --version | perl -lane '$_=~/([\d.]+)/; print $1') && \
+		rm -rf $version && mv opt $version && rm -rf usr && rm -rf etc && \
+		ln -sfn $version latest && \
+		BIN=latest/google/chrome
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-chrome.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Chrome
+Exec=$DIR/$TOOL/$BIN/google-chrome %U
+Type=Application
+Icon=$DIR/$TOOL/$BIN/product_logo_128.png
+StartupWMClass=Google-chrome
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=slimjet               # lightweight chrome based webbrowser with built in adblock
+install_slimjet () {
+	{	url='http://www.slimjetbrowser.com/release/slimjet_amd64.tar.xz' && \
+		wget $url -O $TOOL.tar.xz && tar -xJf $TOOL.tar.xz && rm $TOOL.tar.xz && \
+		version=$(slimjet*/flashpeak-slimjet --version --no-sandbox | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
+		rm -rf $version && mv slimjet* $version && \
+		ln -sfn $version latest && \
+		BIN=latest && \
+		echo ':INFO: to enable mp4 support for slimjet, run it once, then execute:' && \
+		echo ':INFO: google-chrome --user-data-dir=$HOME/.config/slimjet --profile-directory=Default' && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
+install_vivaldi () {
+	{	url=$(curl -s https://vivaldi.com/download/archive/?platform=linux| grep -Eo 'http[^"]+vivaldi-stable[^"]+amd64.deb' | sort -V | tail -1) && \
+		version=$(echo $url | perl -lane '$_=~/stable_([^_]+)/; print $1') && \
+		echo $version && \
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		rm -rf $version  && mv opt $version && rm -rf usr && rm -rf etc && \
+		ln -sfn $version latest && \
+		BIN=latest/vivaldi
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-vivaldi.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Vivaldi
+Exec=$DIR/$TOOL/$BIN/vivaldi %U
+Type=Application
+Icon=$DIR/$TOOL/$BIN/product_logo_128.png
+StartupWMClass=Vivaldi-stable
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=cpanm                 # !!! comes with conda installation. cpanminus to install perl modules
+install_cpanm () {
+	{	url='cpanmin.us' && \
+		wget $url -O cpanm && chmod 755 cpanm && \
+		echo foo && \
+		version=$(./cpanm -v 2>&1 | head -1 | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
+		rm -rf $version && mkdir $version && \
+		mv cpanm $version && \
+		ln -sfn $version latest && \
+		BIN=latest && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=java                  # oracle java runtime and development kit
+install_java () {
+	{	url=$(curl -s http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html | grep -Eo 'http[^"]+linux-x64.tar.gz') && \
+		version=$(echo $url | perl -lane '$_=~/jdk-([^-]+)/; print $1') && \
+		wget --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
+		tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+		rm -rf $version && mv jdk* $version && \
+		ln -sfn $version latest && \
+		BIN=latest/bin && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=master-pdf-editor     # nice pdf viewer and editor
+install_master-pdf-editor () {
+	{	url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -Eo 'http[^"]+qt5.amd64.tar.gz') && \
+		version=$(echo $url | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
+		wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+		rm -rf $version && mv master-pdf-editor* $version && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-masterpdfeditor.desktop ||
+[Desktop Entry]
+Terminal=false
+Name=Masterpdfeditor
+Exec=$DIR/$TOOL/$BIN/masterpdfeditor5
+Type=Application
+Icon=$DIR/$TOOL/$BIN/masterpdfeditor5.png
+StartupWMClass=Masterpdfeditor4
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=sublime               # very powerful text editor and integrated developer environment for all languages
+install_sublime () {
+	{	url=$(curl -s  https://www.sublimetext.com/3 | grep -Eo 'http[^"]+x64.tar.bz2') && \
+		version=$(echo $url | perl -lane '$_=~/build_([^_]+)/; print $1') && \
+		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		rm -rf $version && mv sublime* $version && \
+		ln -sfn sublime_text $version/subl && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-sublime.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Sublime
+Exec=$DIR/$TOOL/$BIN/sublime_text
+Type=Application
+Icon=$DIR/$TOOL/$BIN/Icon/128x128/sublime-text.png
+StartupWMClass=Sublime_text
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=thunderbird           # updates itself. thunderbird email tool
+install_thunderbird () {
+	# https://ftp.mozilla.org/pub/thunderbird/candidates/
+	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/thunderbird/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
+		url="https://ftp.mozilla.org/pub/thunderbird/releases/$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2" && \
+		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		rm -rf $version && mv thunderbird* $version && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-thunderbird.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Thunderbird
+Exec=$DIR/$TOOL/$BIN/thunderbird
+Type=Application
+Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
+StartupWMClass=Thunderbird
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=firefox               # updates via interface possible. firefox webbrowser
+install_firefox () {
+	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/firefox/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
+		url="https://ftp.mozilla.org/pub/firefox/releases/$version/linux-x86_64/en-US/firefox-$version.tar.bz2" && \
+		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		rm -rf $version && mv firefox* $version && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-firefox.desktop || return 1
+[Desktop Entry]
+Name=Firefox
+Exec=$DIR/$TOOL/$BIN/firefox %u
+Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
+Terminal=false
+Type=Application
+StartupWMClass=Firefox
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=skype                 # !!! may fail to be installed on some systems
+install_skype () {
+	{	url='https://go.skype.com/skypeforlinux-64.deb' && \
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		rm -rf opt latest && \
+		mv usr latest && \
+		BIN=latest/bin
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-skype.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Skype
+Exec=$DIR/$TOOL/$BIN/skypeforlinux
+Type=Application
+Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/skypeforlinux.png
+StartupWMClass=Skype
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=adb                   # minimal installation of android debugging bridge and sideload
+install_adb () {
+	{	url='https://dl.google.com/android/repository/platform-tools-latest-linux.zip' && \
+		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
+		version=$(platform-tools*/adb version | grep -F version | cut -d ' ' -f 5) && \
+		mv platform-tools* $version && \
+		ln -sfn $version latest && \
+		BIN=latest && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=conda                 # root less package control system to be used via 'source conda/bin/activate'. pre-configured environment py3pl5r3 for python3, perl5 and r 3
+install_conda () {
+	{	url='https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh' && \
+		wget $url -O miniconda.sh && \
+		bash miniconda.sh -b -f -p $PWD && \
+		source bin/activate && \
+		conda update -y conda
+		conda config --set changeps1 False && \
+		conda create -y -n py3pl5r3; true && \
+		source activate py3pl5r3 && \
+		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
+            gcc-7 libgcc-7 automake cmake zlib ncurses xz \
+            perl perl-threaded perl-app-cpanminus perl-dbi \
+			r r-essentials readline && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=perl-modules          # !!! you need to have cpanm installed or to activate conda first. pre-configured modules Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
+install_perl-modules () {
+	if [[ -n $CONDA_PREFIX ]]; then
+		{	mkdir -p src && \
+			#url='http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/DB_File-1.840.tar.gz' && \
+			#wget $url -O dbfile.tar.gz && \
+			#tar -xzf dbfile.tar.gz.tar.gz && \
+			#cd DB_File* && \
+			#perl Makefile.PL PREFIX=$CONDA_PREFIX && \
+			#sed -i -r 's@^\s*INCLUDE\s*=.+@INCLUDE = $CONDA_PREFIX/include@' config.in && \
+			#sed -i -r 's@^\s*LIB\s*=.+@LIB = $CONDA_PREFIX/lib@' config.in && \
+			#make -j $THREADS && \
+			#make install && \
+			#cd .. && \
+			cpanm -l /dev/null --force --self-contained --scandeps --save-dists $PWD/src Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple && \
+			cpanm --self-contained --reinstall --mirror file://$PWD/src Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple && \
+			return 0
+		} || return 1
+	else
+		{	mkdir -p src && \
+			cpanm -l /dev/null --force --self-contained --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			cpanm -l $PWD --self-contained --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			return 0
+		} || return 1
+	fi
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=htop                  # !!! for installation via conda, activate conda first. graphical task manager
+install_htop () {
+	if [[ -n $CONDA_PREFIX ]]; then
+		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack htop || return 1
+		return 0
+	else 
+		{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -r 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
+			url="http://hisham.hm/htop/releases/$version/htop-$version.tar.gz" && \
+			wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+			rm -rf $version && mv htop* $version && \
+			cd $version && \
+			./configure --prefix=$PWD && \
+			make -j $THREADS && \
+			make install && \
+			cd .. && \
+			ln -sfn $version latest && \
+			BIN=latest/bin && \
+			return 0
+		} || return 1
+	fi
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=jabref                # references/citations manager
+install_jabref () {
+	{	url='https://www.fosshub.com/JabRef.html'/$(curl -s https://www.fosshub.com/JabRef.html | grep -m 1 -ioE 'jabref-[0-9\.]+jar') && \
+		version=$(basename $url .jar | cut -d '-' -f 2-) && \
+		rm -rf $version && mkdir -p $version && \
+		cd $version && \
+		wget $url -O jabref.jar && \
+		mkdir -p bin && \
+		javawrapper bin/jabref $PWD/jabref.jar && \
+		cd .. && \
+		ln -sfn $version/bin latest && \
+		BIN=latest && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=tilix                 # best terminal emulator
+install_tilix () {
+	{	url='https://github.com/gnunn1/tilix/releases/'$(curl -s https://github.com/gnunn1/tilix/releases/ | grep -oP 'download\/.+/tilix.zip' | sort -V | tail -1) && \
+		version=$(basename $(dirname $url)) && \
+		rm -rf $version && mkdir -p $version && \
+		cd $version  && \
+		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
+		mv usr/* . && rm -rf usr && \
+		glib-compile-schemas share/glib-*/schemas/
+		touch bin/tilix.sh && \
+		chmod 755 bin/* && \
+		cd .. && \
+		ln -sfn $version latest && \
+		BIN=latest/bin
+	} || return 1
+cat << EOF > $DIR/$TOOL/$version/bin/tilix.sh || return 1
+#!/usr/bin/env bash
+export XDG_DATA_DIRS=\$XDG_DATA_DIRS:$DIR/$TOOL/$version/share
+export GSETTINGS_SCHEMA_DIR=\$GSETTINGS_SCHEMA_DIR:$DIR/$TOOL/$version/share/glib-2.0/schemas
+source /etc/profile.d/vte.sh
+$DIR/$TOOL/$version/bin/tilix
+EOF
+cat << EOF > $HOME/.local/share/applications/my-tilix.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Tilix
+Exec=$DIR/$TOOL/latest/bin/tilix.sh
+Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/com.gexperts.Tilix.png
+Type=Application
+StartupWMClass=Tilix
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=meld                  # compare files
+install_meld () {
+	{	url=$(curl -s http://meldmerge.org/ | grep -Eo '^\s*<a href="[^"]+' | grep sources | sed -r 's/\s*<a href="//' | sort -V | tail -1) && \
+		version=$(basename $(dirname $url)) && \
+		wget $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
+		rm -rf $version && \
+		mv meld* $version && \
+		ln -sfn $version latest && \
+		BIN=latest/bin && \
+		return 0
+	} || return 1
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=spotify               # spotify - may need sudo ln -sf /usr/lib64/libcurl.so.4 /usr/lib64/libcurl-gnutls.so.4
+install_spotify () {
+	{	url='http://repository-origin.spotify.com/pool/non-free/s/spotify-client/'$(curl -s http://repository-origin.spotify.com/pool/non-free/s/spotify-client/ | grep -oE 'spotify-client[^"]+_amd64.deb' | sort -V | tail -1)
+		version=$(basename $url | cut -d '_' -f 2)
+		version=${version%.*}
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.gz | tar xz && rm $TOOL.deb && \
+		rm -rf $version  && mv usr/share/spotify $version && rm -rf usr && rm -rf etc && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+cat << EOF > $HOME/.local/share/applications/my-spotify.desktop || return 1
+[Desktop Entry]
+Terminal=false
+Name=Spotify
+Exec=$DIR/$TOOL/latest/spotify
+Type=Application
+Icon=$DIR/$TOOL/latest/icons/spotify-linux-256.png
+StartupWMClass=Spotify
+EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+cat << EOF
+:INFO: success
+:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
+EOF
