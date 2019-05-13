@@ -25,46 +25,46 @@ OPT='all'
 
 usage() {
 	tools=$(grep '^TOOL=' $0 | cut -d '=' -f 2)
-cat << EOF
-DESCRIPTION
-$(basename $0) brings software locally to your linux computer
-!!! we <3 a space-free file-paths !!!
+	cat <<- EOF
+		DESCRIPTION
+		$(basename $0) brings software locally to your linux computer
+		!!! we <3 a space-free file-paths !!!
 
-VERSION
-0.1.4
+		VERSION
+		0.1.4
 
-SYNOPSIS
-$(basename $0) -i [tool]
+		SYNOPSIS
+		$(basename $0) -i [tool]
 
-OPTIONS
--h | --help           # prints this message
--d | --dir [path]     # installation path - default: $DIR
--t | --threads [num]  # threads to use for comilation - default: $THREADS
--i | --install [tool] # tool to install/update (see below) - default: all
+		OPTIONS
+		-h | --help           # prints this message
+		-d | --dir [path]     # installation path - default: $DIR
+		-t | --threads [num]  # threads to use for comilation - default: $THREADS
+		-i | --install [tool] # tool to install/update (see below) - default: all
 
-TOOLS
-$tools
+		TOOLS
+		$tools
 
-INFO
-!!! please adapt according to your installation path setting
-- to load conda execute 'source $DIR/conda/bin/activate tools'
-- to load tools execute 'source $SOURCE'
-- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
-- to use tilix execute 
-	1) 'export XDG_DATA_DIRS=$DIR/tilix/latest/share'
-	2) 'export GSETTINGS_SCHEMA_DIR=$DIR/tilix/latest/share/glib-2.0/schemas/'
-	3) 'source /etc/profile.d/vte.sh'
-=> store command(s) permanent in the file $HOME/.bashrc
-- to define a tool as default application adapt 
-	~/.config/mimeapps.list
-	~/.local/share/applications/mimeapps.list
+		INFO
+		!!! please adapt according to your installation path setting
+		- to load conda execute 'source $DIR/conda/bin/activate tools'
+		- to load tools execute 'source $SOURCE'
+		- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
+		- to use tilix execute 
+			1) 'export XDG_DATA_DIRS=$DIR/tilix/latest/share'
+			2) 'export GSETTINGS_SCHEMA_DIR=$DIR/tilix/latest/share/glib-2.0/schemas/'
+			3) 'source /etc/profile.d/vte.sh'
+		=> store command(s) permanent in the file $HOME/.bashrc
+		- to define a tool as default application adapt 
+			~/.config/mimeapps.list
+			~/.local/share/applications/mimeapps.list
 
-REFERENCES
-(c) Konstantin Riege
-konstantin{.}riege{a}uni-jena{.}de
-konstantin{a}bioinf{.}uni-leipzig{.}de
-konstantin{.}riege{a}leibniz-fli{.}de
-EOF
+		REFERENCES
+		(c) Konstantin Riege
+		konstantin{.}riege{a}uni-jena{.}de
+		konstantin{a}bioinf{.}uni-leipzig{.}de
+		konstantin{.}riege{a}leibniz-fli{.}de
+	EOF
 
 	exit 0
 }
@@ -368,22 +368,40 @@ install_adb () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=conda                 # root less package control mechanism with Python, Perl, R to be used via 'source conda2/bin/activate tools'
+TOOL=conda                 # root less package control mechanism with Python2/3, Perl and R to be used via 'source conda2/bin/activate [py2|py3]'
 install_conda () {
-	{	url='https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh' && \
+	# readline 7 causes library version number to be lower on the shared object warnings
+	# use quantstack gcc for r and perl module installation - defaults gcc has a weird usage
+	# under perl > 5.22 List::MoreUtils installation fails
+	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
+	{	rm -rf * && \
+		url='https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh' && \
 		wget $url -O miniconda.sh && \
 		bash miniconda.sh -b -f -p $PWD && \
 		source bin/activate && \
 		conda config --set changeps1 False && \
-		conda create -y -n tools python=2 && \
-		source activate tools && \
+		conda create -y -n py2 python=2 && \
+		conda create -y -n py3 python=3 && \
+
+		source activate py2 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			gcc-7 libgcc-7 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			make automake zlib ncurses xz bzip2 pigz pbzip2 ghostscript readline=6 perl=5.22 perl-threaded perl-app-cpanminus perl-dbi && \
+			make automake zlib ncurses xz bzip2 pigz pbzip2 ghostscript readline=6 perl=5.22 perl-threaded=5.22 perl-app-cpanminus perl-dbi && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
-			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr
+			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
+		conda -y -a clean
+
+		source activate py3 && \
+		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
+			gcc-7 libgcc-7 && \
+		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
+			make automake zlib ncurses xz bzip2 pigz pbzip2 ghostscript readline=6 perl=5.22 perl-threaded=5.22 perl-app-cpanminus perl-dbi && \
+		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
+			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
+			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
+		conda -y -a clean
 		return 0
 	} || return 1
 }
@@ -457,7 +475,7 @@ install_jabref () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=igv                # !!! needs java 11 (setup -i java). interactive genome viewer
+TOOL=igv                   # !!! needs java 11 (setup -i java). interactive genome viewer
 install_igv () {
 	{	url=$(curl -s https://software.broadinstitute.org/software/igv/download | grep -Eo 'href="[^"]+\.zip' | grep -vF -e Linux -e app.zip | cut -d '"' -f 2) && \
 		version=$(basename $url .zip | cut -d '_' -f 2-) && \
