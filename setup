@@ -31,7 +31,7 @@ usage() {
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.1.4
+		0.1.5
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
