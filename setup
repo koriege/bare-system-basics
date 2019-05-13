@@ -47,7 +47,7 @@ usage() {
 
 		INFO
 		!!! please adapt according to your installation path setting
-		- to load conda execute 'source $DIR/conda/bin/activate tools'
+		- to load conda execute 'source $DIR/conda/bin/activate [py2|py3]'
 		- to load tools execute 'source $SOURCE'
 		- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
 		- to use tilix execute 
@@ -383,7 +383,7 @@ install_conda () {
 		conda create -y -n py2 python=2 && \
 		conda create -y -n py3 python=3 && \
 
-		source activate py2 && \
+		conda activate py2 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			gcc-7 libgcc-7 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
@@ -391,9 +391,9 @@ install_conda () {
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
 			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
-		conda -y -a clean
+		conda clean -y -a && \
 
-		source activate py3 && \
+		conda activate py3 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			gcc-7 libgcc-7 && \
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
@@ -401,7 +401,7 @@ install_conda () {
 		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
 			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
 			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
-		conda -y -a clean
+		conda clean -y -a
 		return 0
 	} || return 1
 }
