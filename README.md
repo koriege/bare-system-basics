@@ -13,6 +13,7 @@ setup -i [tool|all]
 - google-chrome         # google chrome webbrowser
 - slimjet               # lightweight chrome based webbrowser with built in adblock
 - vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
+- opera                 # chrome based webbrowser with vpn
 - cpanm                 # !!! comes with conda installation. cpanminus to install perl modules
 - java                  # oracle java 11 runtime and development kit
 - igv                   # !!! needs java 11. interactive genome viewer
