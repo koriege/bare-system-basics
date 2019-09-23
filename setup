@@ -1,5 +1,10 @@
 #! /usr/bin/env bash
 # (c) Konstantin Riege
+# DEV help to find StartupWMClass to group all windows of a tool at the dock
+# 1 type in terminal: xprop WM_CLASS
+# 2 click on tool window
+# 3 use return value
+
 set -e
 shopt -s extglob
 trap 'trapper' INT TERM
@@ -31,7 +36,7 @@ usage() {
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.1.5
+		0.1.6
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -164,15 +169,15 @@ install_google-chrome () {
 		ln -sfn $version latest && \
 		BIN=latest/google/chrome
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-chrome.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Chrome
-Exec=$DIR/$TOOL/$BIN/google-chrome %U
-Type=Application
-Icon=$DIR/$TOOL/$BIN/product_logo_128.png
-StartupWMClass=Google-chrome
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-chrome.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Chrome
+		Exec=$DIR/$TOOL/$BIN/google-chrome %U
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/product_logo_128.png
+		StartupWMClass=Google-chrome
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -202,15 +207,38 @@ install_vivaldi () {
 		ln -sfn $version latest && \
 		BIN=latest/vivaldi
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-vivaldi.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Vivaldi
-Exec=$DIR/$TOOL/$BIN/vivaldi %U
-Type=Application
-Icon=$DIR/$TOOL/$BIN/product_logo_128.png
-StartupWMClass=Vivaldi-stable
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-vivaldi.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Vivaldi
+		Exec=$DIR/$TOOL/$BIN/vivaldi %U
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/product_logo_128.png
+		StartupWMClass=Vivaldi-stable
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=opera                 # chrome based webbrowser with vpn
+install_opera () {
+	{	version=$(curl -s https://get.geo.opera.com/pub/opera/desktop/ | grep -oE 'href="[^"\/]+' | tail -1 | cut -d '"' -f2) && \
+        url="https://get.geo.opera.com/pub/opera/desktop/$version/linux/opera-stable_${version}_amd64.deb"
+		echo $version && \
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		rm -rf $version && mv usr $version && \
+		ln -sfn $version latest && \
+		BIN=latest/bin
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-opera.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Opera
+		Exec=$DIR/$TOOL/$BIN/opera %U
+		Type=Application
+		Icon=$DIR/$TOOL/share/icons/hicolor/256x256/apps/opera.png
+		StartupWMClass=Opera
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -232,7 +260,7 @@ install_cpanm () {
 
 TOOL=java                  # oracle java 11 runtime and development kit
 install_java () {
-	{	url="http://download.oracle.com/otn-pub/java/jdk/11.0.2+9/f51449fcd52f4d52b93a989c5c56ed3c/jdk-11.0.2_linux-x64_bin.tar.gz" && \
+	{	url="https://download.oracle.com/otn-pub/java/jdk/12.0.2+10/e482c34c86bd4bf8b56c0b35558996b9/jdk-12.0.2_linux-x64_bin.tar.gz" && \
 		version=$(echo $url | perl -lane '$_=~/jdk-([^-_]+)/; print $1') && \
 		wget --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
 		tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
@@ -253,15 +281,15 @@ install_master-pdf-editor () {
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-masterpdfeditor.desktop ||
-[Desktop Entry]
-Terminal=false
-Name=Masterpdfeditor
-Exec=$DIR/$TOOL/$BIN/masterpdfeditor5
-Type=Application
-Icon=$DIR/$TOOL/$BIN/masterpdfeditor5.png
-StartupWMClass=Masterpdfeditor4
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-masterpdfeditor.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Masterpdfeditor
+		Exec=$DIR/$TOOL/$BIN/masterpdfeditor5
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/masterpdfeditor5.png
+		StartupWMClass=Masterpdfeditor5
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -276,15 +304,15 @@ install_sublime () {
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-sublime.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Sublime
-Exec=$DIR/$TOOL/$BIN/sublime_text
-Type=Application
-Icon=$DIR/$TOOL/$BIN/Icon/128x128/sublime-text.png
-StartupWMClass=Sublime_text
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-sublime.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Sublime
+		Exec=$DIR/$TOOL/$BIN/sublime_text
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/Icon/128x128/sublime-text.png
+		StartupWMClass=Sublime_text
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -299,15 +327,15 @@ install_thunderbird () {
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-thunderbird.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Thunderbird
-Exec=$DIR/$TOOL/$BIN/thunderbird
-Type=Application
-Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
-StartupWMClass=Thunderbird
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-thunderbird.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Thunderbird
+		Exec=$DIR/$TOOL/$BIN/thunderbird
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
+		StartupWMClass=Thunderbird
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -321,15 +349,15 @@ install_firefox () {
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-firefox.desktop || return 1
-[Desktop Entry]
-Name=Firefox
-Exec=$DIR/$TOOL/$BIN/firefox %u
-Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
-Terminal=false
-Type=Application
-StartupWMClass=Firefox
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-firefox.desktop || return 1
+		[Desktop Entry]
+		Name=Firefox
+		Exec=$DIR/$TOOL/$BIN/firefox %u
+		Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
+		Terminal=false
+		Type=Application
+		StartupWMClass=Firefox
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -342,15 +370,15 @@ install_skype () {
 		mv usr latest && \
 		BIN=latest/bin
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-skype.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Skype
-Exec=$DIR/$TOOL/$BIN/skypeforlinux
-Type=Application
-Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/skypeforlinux.png
-StartupWMClass=Skype
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-skype.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Skype
+		Exec=$DIR/$TOOL/$BIN/skypeforlinux
+		Type=Application
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/skypeforlinux.png
+		StartupWMClass=Skype
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -486,6 +514,7 @@ install_igv () {
 		mem=$(grep -F -i memavailable /proc/meminfo | awk '{printf("%d",$2*0.8/1024/1024)}') && \
 		sed -i -r "s/-Xmx\S+/-Xmx${mem}g/" igv.sh && \
 		mkdir -p bin && \
+	    sed -i 's/readlink[^$]/readlink -f /' igv.sh && \
 		cd bin && \
 		ln -sfn ../igv.sh igv && \
 		cd ../.. && \
@@ -511,22 +540,22 @@ install_tilix () {
 		ln -sfn $version latest && \
 		BIN=latest/bin
 	} || return 1
-cat << EOF > $DIR/$TOOL/$version/bin/tilix.sh || return 1
-#!/usr/bin/env bash
-export XDG_DATA_DIRS=\$XDG_DATA_DIRS:$DIR/$TOOL/$version/share
-export GSETTINGS_SCHEMA_DIR=\$GSETTINGS_SCHEMA_DIR:$DIR/$TOOL/$version/share/glib-2.0/schemas
-source /etc/profile.d/vte.sh
-$DIR/$TOOL/$version/bin/tilix
-EOF
-cat << EOF > $HOME/.local/share/applications/my-tilix.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Tilix
-Exec=$DIR/$TOOL/latest/bin/tilix.sh
-Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/com.gexperts.Tilix.png
-Type=Application
-StartupWMClass=Tilix
-EOF
+	cat <<- EOF > $DIR/$TOOL/$version/bin/tilix.sh || return 1
+		#!/usr/bin/env bash
+		export XDG_DATA_DIRS=\$XDG_DATA_DIRS:$DIR/$TOOL/$version/share
+		export GSETTINGS_SCHEMA_DIR=\$GSETTINGS_SCHEMA_DIR:$DIR/$TOOL/$version/share/glib-2.0/schemas
+		source /etc/profile.d/vte.sh
+		$DIR/$TOOL/$version/bin/tilix
+	EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-tilix.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Tilix
+		Exec=$DIR/$TOOL/latest/bin/tilix.sh
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/com.gexperts.Tilix.png
+		Type=Application
+		StartupWMClass=Tilix
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
@@ -555,20 +584,20 @@ install_spotify () {
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
-cat << EOF > $HOME/.local/share/applications/my-spotify.desktop || return 1
-[Desktop Entry]
-Terminal=false
-Name=Spotify
-Exec=$DIR/$TOOL/latest/spotify
-Type=Application
-Icon=$DIR/$TOOL/latest/icons/spotify-linux-256.png
-StartupWMClass=Spotify
-EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-spotify.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Spotify
+		Exec=$DIR/$TOOL/latest/spotify
+		Type=Application
+		Icon=$DIR/$TOOL/latest/icons/spotify-linux-256.png
+		StartupWMClass=Spotify
+	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-cat << EOF
-:INFO: success
-:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
+cat <<- EOF
+	:INFO: success
+	:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
 EOF
