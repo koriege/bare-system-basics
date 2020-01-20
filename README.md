@@ -4,8 +4,8 @@ no-root software installer and updater for non production ready linux environmen
 
 ## usage
 ```
-setup -h
-setup -i [tool|all]
+setup.sh -h
+setup.sh -i [tool|all]
 ```
 
 ## integrated tools
@@ -14,18 +14,20 @@ setup -i [tool|all]
 - slimjet               # lightweight chrome based webbrowser with built in adblock
 - vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
 - opera                 # chrome based webbrowser with vpn
-- cpanm                 # !!! comes with conda installation. cpanminus to install perl modules
+- cpanm                 # !!! comes with conda-tools installation. cpanminus to install perl modules
 - java                  # oracle java 11 runtime and development kit
 - igv                   # !!! needs java 11. interactive genome viewer
 - master-pdf-editor     # nice pdf viewer and editor
 - sublime               # very powerful text editor and integrated developer environment for all languages
+- sublime-merge         # very powerful git client
 - thunderbird           # updates itself. thunderbird email tool
 - firefox               # updates via interface possible. firefox webbrowser
 - skype                 # !!! may fail to be installed on some systems
 - adb                   # minimal installation of android debugging bridge and sideload
-- conda                 # root less package control mechanism with Python2/3, Perl and R to be used via 'source conda2/bin/activate [py2|py3]'
-- perl-modules          # !!! you need to have cpanm installed or to activate conda first. pre-configured modules Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::SimpleTree::Simple XML::Simple
-- htop                  # !!! for installation via conda, activate conda first. graphical task manager
+- conda                 # root less package control software
+- conda-tools           # install tools via conda. perl, r, rstudio, datamash, gcc
+- perl-modules          # !!! you need to install cpanm or install and activate conda first. Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
+- htop                  # graphical task manager
 - jabref                # references/citations manager
 - tilix                 # best terminal emulator
 - meld                  # compare files

@@ -7,14 +7,14 @@
 
 set -e
 shopt -s extglob
-trap 'trapper' INT TERM
+trap 'die' INT TERM
 #trap 'kill -PIPE 0' EXIT # kills parental processes as well - shlog conflict
 #trap 'kill -PIPE -- -$$' EXIT # kill all childs - works only if $$ is process group leader
 #trap 'kill -PIPE $(jobs -p)' EXIT # same as above
 trap 'kill -PIPE $(pstree -p $$ | grep -Eo "\([0-9]+\)" | grep -Eo "[0-9]+") &> /dev/null' EXIT # parse pstree
 # AVOID DOUBLE FORKS -> run(){cmd &}; run & -> i.e. cmd gets new process group and cannot be killed
 
-trapper() {
+die() {
 	[[ $* ]] && echo ":ERROR: $*" || echo ":ERROR: failed"
 	exit 1
 }
@@ -29,14 +29,14 @@ OPT='all'
 ############### FUNCTIONS ###############
 
 usage() {
-	tools=$(grep '^TOOL=' $0 | cut -d '=' -f 2)
+	local tools=$(grep '^TOOL=' $0 | cut -d '=' -f 2)
 	cat <<- EOF
 		DESCRIPTION
 		$(basename $0) brings software locally to your linux computer
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.1.6
+		0.2.0
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -45,29 +45,27 @@ usage() {
 		-h | --help           # prints this message
 		-d | --dir [path]     # installation path - default: $DIR
 		-t | --threads [num]  # threads to use for comilation - default: $THREADS
-		-i | --install [tool] # tool to install/update (see below) - default: all
+		-i | --install [tool] # tool to install/update (see below) - default: all, but conda-tools
 
 		TOOLS
 		$tools
 
 		INFO
-		!!! please adapt according to your installation path setting
-		- to load conda execute 'source $DIR/conda/bin/activate [py2|py3]'
-		- to load tools execute 'source $SOURCE'
+		1) to stack mutliple windows in gnome application panel
+		- define StartupWMClass in .desktop file
+		- assign value by executing 'xprop WM_CLASS' + click on window
+
+		2) how to execute tools installed via conda
+		- to load conda itself, execute 'source $DIR/conda/latest/bin/activate'
+		- to load conda tools execute 'conda env list', and 'conda activate [env]'
 		- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
-		- to use tilix execute 
-			1) 'export XDG_DATA_DIRS=$DIR/tilix/latest/share'
-			2) 'export GSETTINGS_SCHEMA_DIR=$DIR/tilix/latest/share/glib-2.0/schemas/'
-			3) 'source /etc/profile.d/vte.sh'
-		=> store command(s) permanent in the file $HOME/.bashrc
-		- to define a tool as default application adapt 
-			~/.config/mimeapps.list
-			~/.local/share/applications/mimeapps.list
+		
+		3) to define a tool as default application
+		- adapt ~/.config/mimeapps.list
+		- adapt ~/.local/share/applications/mimeapps.list
 
 		REFERENCES
 		(c) Konstantin Riege
-		konstantin{.}riege{a}uni-jena{.}de
-		konstantin{a}bioinf{.}uni-leipzig{.}de
 		konstantin{.}riege{a}leibniz-fli{.}de
 	EOF
 
@@ -75,18 +73,23 @@ usage() {
 }
 
 checkopt() {
+	local arg=false
 	case $1 in
-	-h | --h | -help | --help) usage; return 0;;
-	-t | --t | -threads | --threads) THREADS=$2;;
-	-i | --i | -install | --install) OPT=$2;;
-	-d | --d | -dir | --dir) [[ $(mkdir -p $DIR &> /dev/null; echo $?) -gt 0 ]] && echo ':ERROR: check your installation path' && return 1; DIR=$2 && SOURCE=$DIR/SOURCE.me;;
-	-*) echo ":ERROR: illegal option $1"; return 1;;
-	*) echo ":ERROR: illegal option $2"; return 1;;
+		-h | --h | -help | --help) usage;;
+		-t | --t | -threads | --threads) arg=true; THREADS=$2;;
+		-i | --i | -install | --install) arg=true; OPT=$2;;
+		-d | --d | -dir | --dir) arg=true; DIR=$2; SOURCE=$DIR/SOURCE.me; [[ $(mkdir -p $DIR &> /dev/null; echo $?) -gt 0 ]] && die 'check your installation path';;
+		-*) die "illegal option $1";;
+		*) die "illegal option $2";;
 	esac
-	[[ ! $2 ]] && echo ":ERROR: argument missing for option $1" && return 1
-	[[ $2 =~ ^- ]] && echo ":ERROR: illegal argument $2 for option $1" && return 1
-
-	return 0
+	$arg && {
+		[[ ! $2 ]] && die "argument missing for option $1"
+		[[ "$2" =~ ^- ]] && die "illegal argument $2 for option $1"
+		return 0
+	} || {
+		[[ $2 ]] && [[ ! "$2" =~ ^- ]] && die "illegal argument $2 for option $1"
+		return 0
+	}
 }
 
 setup_cron () {
@@ -99,12 +102,13 @@ setup_cron () {
 #setup_cron
 
 run () {
+	FOUND=true
 	# backup
 	mkdir -p $DIR/$TOOL && cd $DIR/$TOOL
-	$1 || trapper $TOOL
+	$1 || die $TOOL
 	# adapt source
 	touch $SOURCE
-	if [[ ! $(grep "$DIR/$TOOL/$BIN" $SOURCE) ]]; then 
+	if [[ $BIN && ! $(grep "$DIR/$TOOL/$BIN" $SOURCE) ]]; then 
 		sed -i "/PATH=/d;" $SOURCE
 		echo 'VAR=$VAR:'"$DIR/$TOOL/$BIN" >> $SOURCE
 		echo 'PATH=$VAR:$PATH' >> $SOURCE
@@ -150,18 +154,19 @@ javawrapper() {
 ############### MAIN ###############
 
 [[ $# -eq 0 ]] && usage
-[[ $# -eq 1 ]] && [[ ! $1 =~ ^- ]] && echo ":ERROR: illegal option $1" && trapper
+[[ $# -eq 1 ]] && [[ ! $1 =~ ^- ]] && die "illegal option $1"
 for i in $(seq 1 $#); do
 	if [[ ${!i} =~ ^- ]]; then
-		[[ i -lt $# ]] && j=$((i+1))
-		checkopt "${!i}" "${!j}" || trapper
-	else
+		j=$((i+1))
+		checkopt "${!i}" "${!j}" || die
+	else 
 		((++i))
 	fi
 done
 
 TOOL=google-chrome         # google chrome webbrowser
-install_google-chrome () {
+install_google-chrome() {
+	local url version
 	{	url='https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb' && \
 		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		version=$(opt/google/chrome/google-chrome --version | perl -lane '$_=~/([\d.]+)/; print $1') && \
@@ -183,7 +188,8 @@ install_google-chrome () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=slimjet               # lightweight chrome based webbrowser with built in adblock
-install_slimjet () {
+install_slimjet() {
+	local url version
 	{	url='http://www.slimjetbrowser.com/release/slimjet_amd64.tar.xz' && \
 		wget $url -O $TOOL.tar.xz && tar -xJf $TOOL.tar.xz && rm $TOOL.tar.xz && \
 		version=$(slimjet*/flashpeak-slimjet --version --no-sandbox | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
@@ -198,7 +204,8 @@ install_slimjet () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
-install_vivaldi () {
+install_vivaldi() {
+	local url version
 	{	url=$(curl -s https://vivaldi.com/download/archive/?platform=linux| grep -Eo 'http[^"]+vivaldi-stable[^"]+amd64.deb' | sort -V | tail -1) && \
 		version=$(echo $url | perl -lane '$_=~/stable_([^_]+)/; print $1') && \
 		echo $version && \
@@ -221,7 +228,8 @@ install_vivaldi () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=opera                 # chrome based webbrowser with vpn
-install_opera () {
+install_opera() {
+	local url version
 	{	version=$(curl -s https://get.geo.opera.com/pub/opera/desktop/ | grep -oE 'href="[^"\/]+' | tail -1 | cut -d '"' -f2) && \
         url="https://get.geo.opera.com/pub/opera/desktop/$version/linux/opera-stable_${version}_amd64.deb"
 		echo $version && \
@@ -243,8 +251,33 @@ install_opera () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=cpanm                 # !!! comes with conda installation. cpanminus to install perl modules
-install_cpanm () {
+TOOL=keeweb               # keepass db compatible password manager with cloud sync support
+install_keeweb() {
+	local url version
+	{	url='https://github.com'$(curl -s https://github.com/keeweb/keeweb/releases | grep -m 1 -Eo '[^"]+linux.x64.zip') && \
+		version=$(basename $(dirname $url)) && \
+        version=${version:1} && \
+        rm -rf $version && mkdir $version && \
+		wget $url -O $TOOL.zip && unzip -q $TOOL.zip -d $version && rm $TOOL.zip && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-keeweb.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=KeeWeb
+		Exec=$DIR/$TOOL/$BIN/KeeWeb
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/128x128.png
+		StartupWMClass=KeeWeb
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=cpanm                 # !!! comes with conda-tools installation. cpanminus to install perl modules
+install_cpanm() {
+	local url version
 	{	url='cpanmin.us' && \
 		wget $url -O cpanm && chmod 755 cpanm && \
 		echo foo && \
@@ -259,8 +292,9 @@ install_cpanm () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=java                  # oracle java 11 runtime and development kit
-install_java () {
-	{	url="https://download.oracle.com/otn-pub/java/jdk/12.0.2+10/e482c34c86bd4bf8b56c0b35558996b9/jdk-12.0.2_linux-x64_bin.tar.gz" && \
+install_java() {
+	local url version
+	{	url="https://download.oracle.com/otn-pub/java/jdk/13.0.2+8/d4173c853231432d94f001e99d882ca7/jdk-13.0.2_linux-x64_bin.tar.gz" && \
 		version=$(echo $url | perl -lane '$_=~/jdk-([^-_]+)/; print $1') && \
 		wget --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
 		tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
@@ -273,7 +307,8 @@ install_java () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=master-pdf-editor     # nice pdf viewer and editor
-install_master-pdf-editor () {
+install_master-pdf-editor() {
+	local url version
 	{	url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -Eo 'http[^"]+qt5.amd64.tar.gz') && \
 		version=$(echo $url | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
 		wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
@@ -295,7 +330,8 @@ install_master-pdf-editor () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=sublime               # very powerful text editor and integrated developer environment for all languages
-install_sublime () {
+install_sublime() {
+	local url version
 	{	url=$(curl -s  https://www.sublimetext.com/3 | grep -Eo 'http[^"]+x64.tar.bz2') && \
 		version=$(echo $url | perl -lane '$_=~/build_([^_]+)/; print $1') && \
 		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
@@ -310,15 +346,40 @@ install_sublime () {
 		Name=Sublime
 		Exec=$DIR/$TOOL/$BIN/sublime_text
 		Type=Application
-		Icon=$DIR/$TOOL/$BIN/Icon/128x128/sublime-text.png
-		StartupWMClass=Sublime_text
+		Icon=$DIR/$TOOL/$BIN/Icon/256x256/sublime-text.png
+		StartupWMClass=Subl
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=sublime-merge         # very powerful git client
+install_sublime-merge() {
+	local url version
+	{	url=$(curl -s https://www.sublimemerge.com/download | grep -Eo 'http[^"]+x64.tar.xz' | sort -V | tail -1) && \
+		version=$(echo $url | perl -lane '$_=~/build_([^_]+)/; print $1') && \
+		wget $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
+		rm -rf $version && mv sublime* $version && \
+		ln -sfn sublime_text $version/sublmerge && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-sublime-merge.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Sublime Merge
+		Exec=$DIR/$TOOL/$BIN/sublime_merge
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/Icon/256x256/sublime-merge.png
+		StartupWMClass=Sublime_merge
 	EOF
 	return 0
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=thunderbird           # updates itself. thunderbird email tool
-install_thunderbird () {
+install_thunderbird() {
+	local url version
 	# https://ftp.mozilla.org/pub/thunderbird/candidates/
 	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/thunderbird/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
 		url="https://ftp.mozilla.org/pub/thunderbird/releases/$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2" && \
@@ -341,7 +402,8 @@ install_thunderbird () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=firefox               # updates via interface possible. firefox webbrowser
-install_firefox () {
+install_firefox() {
+	local url version
 	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/firefox/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
 		url="https://ftp.mozilla.org/pub/firefox/releases/$version/linux-x86_64/en-US/firefox-$version.tar.bz2" && \
 		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
@@ -363,7 +425,8 @@ install_firefox () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=skype                 # !!! may fail to be installed on some systems
-install_skype () {
+install_skype() {
+	local url
 	{	url='https://go.skype.com/skypeforlinux-64.deb' && \
 		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf opt latest && \
@@ -384,7 +447,8 @@ install_skype () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=adb                   # minimal installation of android debugging bridge and sideload
-install_adb () {
+install_adb() {
+	local url version
 	{	url='https://dl.google.com/android/repository/platform-tools-latest-linux.zip' && \
 		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
 		version=$(platform-tools*/adb version | grep -F version | cut -d ' ' -f 5) && \
@@ -396,48 +460,45 @@ install_adb () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=conda                 # root less package control mechanism with Python2/3, Perl and R to be used via 'source conda2/bin/activate [py2|py3]'
-install_conda () {
-	# readline 7 causes library version number to be lower on the shared object warnings
-	# use quantstack gcc for r and perl module installation - defaults gcc has a weird usage
-	# under perl > 5.22 List::MoreUtils installation fails
-	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
-	{	rm -rf * && \
-		url='https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh' && \
+TOOL=conda                 # root less package control software
+install_conda() {
+	unset BIN
+	local url version
+	{	url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh' && \
 		wget $url -O miniconda.sh && \
-		bash miniconda.sh -b -f -p $PWD && \
-		source bin/activate && \
-		conda config --set changeps1 False && \
-		conda create -y -n py2 python=2 && \
-		conda create -y -n py3 python=3 && \
-
-		conda activate py2 && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			gcc-7 libgcc-7 && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			make automake zlib ncurses xz bzip2 pigz pbzip2 ghostscript readline=6 perl=5.22 perl-threaded=5.22 perl-app-cpanminus perl-dbi && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
-			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
-		conda clean -y -a && \
-
-		conda activate py3 && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			gcc-7 libgcc-7 && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			make automake zlib ncurses xz bzip2 pigz pbzip2 ghostscript readline=6 perl=5.22 perl-threaded=5.22 perl-app-cpanminus perl-dbi && \
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack \
-			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
-			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
-		conda clean -y -a
+		version=$(bash miniconda.sh -h | grep -F Installs | cut -d ' ' -f 3) && \
+		rm -rf $version && \
+		bash miniconda.sh -b -f -p $version && \
+		ln -sfn $version latest && \
+		BIN=latest/condabin && \
 		return 0
 	} || return 1
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=perl-modules          # !!! you need to install and load cpanm or to activate conda first. Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
-install_perl-modules () {
-	if [[ -n $CONDA_PREFIX ]]; then
+TOOL=conda-tools           # install tools via conda. perl, r, rstudio, datamash, gcc
+install_conda-tools() {
+	[[ -n $CONDA_PREFIX ]] || die 'activate conda first'
+	local name
+	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
+	{	conda config --set changeps1 False && \
+		name="py3_tools_$(date +%F)"
+		conda create -y -n $name python=3 && \
+		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
+			make automake ncurses xz zlib bzip2 pigz pbzip2 ghostscript htslib gcc_linux-64 \
+			perl perl-threaded perl-dbi perl-app-cpanminus \
+			datamash rstudio \
+			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
+			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
+		conda clean -y -a && \
+		return 0
+	} || return 1
+}
+[[ $OPT == $TOOL ]] && install_$TOOL # do not call run install_ to avoid mkdir
+
+TOOL=perl-modules          # !!! you need to install cpanm or install and activate conda first. Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
+install_perl-modules() {
+	if [[ -n $CONDA_PREFIX && "$(which cpanm)" =~ "$CONDA_PREFIX" ]]; then
 		{	mkdir -p src && \
 			#url='http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/DB_File-1.840.tar.gz' && \
 			#wget $url -O dbfile.tar.gz && \
@@ -463,31 +524,28 @@ install_perl-modules () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=htop                  # !!! for installation via conda, activate conda first. graphical task manager
-install_htop () {
-	if [[ -n $CONDA_PREFIX ]]; then
-		conda install -y --override-channels -c iuc -c bioconda -c main -c conda-forge -c defaults -c quantstack htop || return 1
+TOOL=htop                  # graphical task manager
+install_htop() {
+	local url version
+	{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -r 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
+		url="http://hisham.hm/htop/releases/$version/htop-$version.tar.gz" && \
+		wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+		rm -rf $version && mv htop* $version && \
+		cd $version && \
+		./configure --prefix=$PWD && \
+		make -j $THREADS && \
+		make install && \
+		cd .. && \
+		ln -sfn $version latest && \
+		BIN=latest/bin && \
 		return 0
-	else 
-		{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -r 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
-			url="http://hisham.hm/htop/releases/$version/htop-$version.tar.gz" && \
-			wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
-			rm -rf $version && mv htop* $version && \
-			cd $version && \
-			./configure --prefix=$PWD && \
-			make -j $THREADS && \
-			make install && \
-			cd .. && \
-			ln -sfn $version latest && \
-			BIN=latest/bin && \
-			return 0
-		} || return 1
-	fi
+	} || return 1
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=jabref                # references/citations manager
-install_jabref () {
+install_jabref() {
+	local url version
 	{	url='https://www.fosshub.com/JabRef.html'/$(curl -s https://www.fosshub.com/JabRef.html | grep -m 1 -ioE 'jabref-[0-9\.]+jar') && \
 		version=$(basename $url .jar | cut -d '-' -f 2-) && \
 		rm -rf $version && mkdir -p $version && \
@@ -504,7 +562,8 @@ install_jabref () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=igv                   # !!! needs java 11 (setup -i java). interactive genome viewer
-install_igv () {
+install_igv() {
+	local url version
 	{	url=$(curl -s https://software.broadinstitute.org/software/igv/download | grep -Eo 'href="[^"]+\.zip' | grep -vF -e Linux -e app.zip | cut -d '"' -f 2) && \
 		version=$(basename $url .zip | cut -d '_' -f 2-) && \
 		rm -rf $version && \
@@ -526,7 +585,8 @@ install_igv () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=tilix                 # best terminal emulator
-install_tilix () {
+install_tilix() {
+	local url version
 	{	url='https://github.com/gnunn1/tilix/releases/'$(curl -s https://github.com/gnunn1/tilix/releases/ | grep -oP 'download\/.+/tilix.zip' | sort -V | tail -1) && \
 		version=$(basename $(dirname $url)) && \
 		rm -rf $version && mkdir -p $version && \
@@ -536,6 +596,7 @@ install_tilix () {
 		glib-compile-schemas share/glib-*/schemas/
 		touch bin/tilix.sh && \
 		chmod 755 bin/* && \
+		inkscape -D -w 256 -h 256 -e share/icons/hicolor/icon.png share/icons/hicolor/scalable/apps/com.gexperts.Tilix.svg && \
 		cd .. && \
 		ln -sfn $version latest && \
 		BIN=latest/bin
@@ -552,7 +613,7 @@ install_tilix () {
 		Terminal=false
 		Name=Tilix
 		Exec=$DIR/$TOOL/latest/bin/tilix.sh
-		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/com.gexperts.Tilix.png
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/icon.png
 		Type=Application
 		StartupWMClass=Tilix
 	EOF
@@ -561,7 +622,8 @@ install_tilix () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=meld                  # compare files
-install_meld () {
+install_meld() {
+	local url version
 	{	url=$(curl -s http://meldmerge.org/ | grep -Eo '^\s*<a href="[^"]+' | grep sources | sed -r 's/\s*<a href="//' | sort -V | tail -1) && \
 		version=$(basename $(dirname $url)) && \
 		wget $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
@@ -575,8 +637,9 @@ install_meld () {
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
 TOOL=spotify               # spotify - may need sudo ln -sf /usr/lib64/libcurl.so.4 /usr/lib64/libcurl-gnutls.so.4
-install_spotify () {
-	{	url='http://repository-origin.spotify.com/pool/non-free/s/spotify-client/'$(curl -s http://repository-origin.spotify.com/pool/non-free/s/spotify-client/ | grep -oE 'spotify-client[^"]+_amd64.deb' | sort -V | tail -1)
+install_spotify() {
+	local url version
+	{	url='https://repository-origin.spotify.com/pool/non-free/s/spotify-client/'$(curl -s https://repository-origin.spotify.com/pool/non-free/s/spotify-client/ | grep -oE 'spotify-client[^"]+_amd64.deb' | sort -V | tail -1)
 		version=$(basename $url | cut -d '_' -f 2)
 		version=${version%.*}
 		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.gz | tar xz && rm $TOOL.deb && \
@@ -597,7 +660,11 @@ install_spotify () {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-cat <<- EOF
-	:INFO: success
-	:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
-EOF
+${FOUND:=false} && {
+	cat <<- EOF
+		:INFO: success
+		:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
+	EOF
+} || {
+	die "$OPT not found"
+}
