@@ -1,9 +1,5 @@
 #! /usr/bin/env bash
 # (c) Konstantin Riege
-# DEV help to find StartupWMClass to group all windows of a tool at the dock
-# 1 type in terminal: xprop WM_CLASS
-# 2 click on tool window
-# 3 use return value
 
 set -e
 shopt -s extglob
@@ -45,13 +41,13 @@ usage() {
 		-h | --help           # prints this message
 		-d | --dir [path]     # installation path - default: $DIR
 		-t | --threads [num]  # threads to use for comilation - default: $THREADS
-		-i | --install [tool] # tool to install/update (see below) - default: all, but conda-tools
+		-i | --install [tool] # tool to install/update (see below) - default: all, but conda-dev
 
 		TOOLS
 		$tools
 
 		INFO
-		1) to stack mutliple windows in gnome application panel
+		1) to group multiple windows in gnome application dock
 		- define StartupWMClass in .desktop file
 		- assign value by executing 'xprop WM_CLASS' + click on window
 
@@ -187,22 +183,6 @@ install_google-chrome() {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=slimjet               # lightweight chrome based webbrowser with built in adblock
-install_slimjet() {
-	local url version
-	{	url='http://www.slimjetbrowser.com/release/slimjet_amd64.tar.xz' && \
-		wget $url -O $TOOL.tar.xz && tar -xJf $TOOL.tar.xz && rm $TOOL.tar.xz && \
-		version=$(slimjet*/flashpeak-slimjet --version --no-sandbox | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
-		rm -rf $version && mv slimjet* $version && \
-		ln -sfn $version latest && \
-		BIN=latest && \
-		echo ':INFO: to enable mp4 support for slimjet, run it once, then execute:' && \
-		echo ':INFO: google-chrome --user-data-dir=$HOME/.config/slimjet --profile-directory=Default' && \
-		return 0
-	} || return 1
-}
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
-
 TOOL=vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
 install_vivaldi() {
 	local url version
@@ -251,6 +231,53 @@ install_opera() {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
+TOOL=firefox               # updates via interface possible. firefox webbrowser
+install_firefox() {
+	local url version
+	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/firefox/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
+		url="https://ftp.mozilla.org/pub/firefox/releases/$version/linux-x86_64/en-US/firefox-$version.tar.bz2" && \
+		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		rm -rf $version && mv firefox* $version && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-firefox.desktop || return 1
+		[Desktop Entry]
+		Name=Firefox
+		Exec=$DIR/$TOOL/$BIN/firefox %u
+		Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
+		Terminal=false
+		Type=Application
+		StartupWMClass=Firefox
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=thunderbird           # updates itself. thunderbird email tool
+install_thunderbird() {
+	local url version
+	# https://ftp.mozilla.org/pub/thunderbird/candidates/
+	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/thunderbird/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
+		url="https://ftp.mozilla.org/pub/thunderbird/releases/$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2" && \
+		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		rm -rf $version && mv thunderbird* $version && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-thunderbird.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Thunderbird
+		Exec=$DIR/$TOOL/$BIN/thunderbird
+		Type=Application
+		Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
+		StartupWMClass=Thunderbird
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
 TOOL=keeweb               # keepass db compatible password manager with cloud sync support
 install_keeweb() {
 	local url version
@@ -272,22 +299,6 @@ install_keeweb() {
 		StartupWMClass=KeeWeb
 	EOF
 	return 0
-}
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
-
-TOOL=cpanm                 # !!! comes with conda-tools installation. cpanminus to install perl modules
-install_cpanm() {
-	local url version
-	{	url='cpanmin.us' && \
-		wget $url -O cpanm && chmod 755 cpanm && \
-		echo foo && \
-		version=$(./cpanm -v 2>&1 | head -1 | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
-		rm -rf $version && mkdir $version && \
-		mv cpanm $version && \
-		ln -sfn $version latest && \
-		BIN=latest && \
-		return 0
-	} || return 1
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
@@ -377,75 +388,6 @@ install_sublime-merge() {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=thunderbird           # updates itself. thunderbird email tool
-install_thunderbird() {
-	local url version
-	# https://ftp.mozilla.org/pub/thunderbird/candidates/
-	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/thunderbird/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
-		url="https://ftp.mozilla.org/pub/thunderbird/releases/$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2" && \
-		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
-		rm -rf $version && mv thunderbird* $version && \
-		ln -sfn $version latest && \
-		BIN=latest
-	} || return 1
-	cat <<- EOF > $HOME/.local/share/applications/my-thunderbird.desktop || return 1
-		[Desktop Entry]
-		Terminal=false
-		Name=Thunderbird
-		Exec=$DIR/$TOOL/$BIN/thunderbird
-		Type=Application
-		Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
-		StartupWMClass=Thunderbird
-	EOF
-	return 0
-}
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
-
-TOOL=firefox               # updates via interface possible. firefox webbrowser
-install_firefox() {
-	local url version
-	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/firefox/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
-		url="https://ftp.mozilla.org/pub/firefox/releases/$version/linux-x86_64/en-US/firefox-$version.tar.bz2" && \
-		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
-		rm -rf $version && mv firefox* $version && \
-		ln -sfn $version latest && \
-		BIN=latest
-	} || return 1
-	cat <<- EOF > $HOME/.local/share/applications/my-firefox.desktop || return 1
-		[Desktop Entry]
-		Name=Firefox
-		Exec=$DIR/$TOOL/$BIN/firefox %u
-		Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
-		Terminal=false
-		Type=Application
-		StartupWMClass=Firefox
-	EOF
-	return 0
-}
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
-
-TOOL=skype                 # !!! may fail to be installed on some systems
-install_skype() {
-	local url
-	{	url='https://go.skype.com/skypeforlinux-64.deb' && \
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
-		rm -rf opt latest && \
-		mv usr latest && \
-		BIN=latest/bin
-	} || return 1
-	cat <<- EOF > $HOME/.local/share/applications/my-skype.desktop || return 1
-		[Desktop Entry]
-		Terminal=false
-		Name=Skype
-		Exec=$DIR/$TOOL/$BIN/skypeforlinux
-		Type=Application
-		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/skypeforlinux.png
-		StartupWMClass=Skype
-	EOF
-	return 0
-}
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
-
 TOOL=adb                   # minimal installation of android debugging bridge and sideload
 install_adb() {
 	local url version
@@ -476,51 +418,40 @@ install_conda() {
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
-TOOL=conda-tools           # install tools via conda. perl, r, rstudio, datamash, gcc
-install_conda-tools() {
-	[[ -n $CONDA_PREFIX ]] || die 'activate conda first'
-	local name
+TOOL=conda-dev             # setup dev env via conda. perl + packages , r + packages, rstudio, datamash, gcc, pigz, htslib
+install_conda-dev() {
+	[[ -n $CONDA_PREFIX ]] || die 'please activate conda first'
+	local name="py3_dev_$(date +%F)"
+	conda env remove -n $name || die 'please switch to base environment'
+	conda config --set changeps1 False
 	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
-	{	conda config --set changeps1 False && \
-		name="py3_tools_$(date +%F)"
-		conda create -y -n $name python=3 && \
+	{	conda create -y -n $name python=3 && \
 		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
-			make automake ncurses xz zlib bzip2 pigz pbzip2 ghostscript htslib gcc_linux-64 \
-			perl perl-threaded perl-dbi perl-app-cpanminus \
-			datamash rstudio \
-			r-devtools bioconductor-biocinstaller bioconductor-biocparallel \
-			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr && \
+			gcc_linux-64 make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript datamash \
+			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl \
+			rstudio r-devtools bioconductor-biocinstaller bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 \
+			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
 		conda clean -y -a && \
+		FOUND=true && \
 		return 0
 	} || return 1
 }
-[[ $OPT == $TOOL ]] && install_$TOOL # do not call run install_ to avoid mkdir
+[[ $OPT == $TOOL ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
-TOOL=perl-modules          # !!! you need to install cpanm or install and activate conda first. Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
-install_perl-modules() {
-	if [[ -n $CONDA_PREFIX && "$(which cpanm)" =~ "$CONDA_PREFIX" ]]; then
-		{	mkdir -p src && \
-			#url='http://search.cpan.org/CPAN/authors/id/P/PM/PMQS/DB_File-1.840.tar.gz' && \
-			#wget $url -O dbfile.tar.gz && \
-			#tar -xzf dbfile.tar.gz.tar.gz && \
-			#cd DB_File* && \
-			#perl Makefile.PL PREFIX=$CONDA_PREFIX && \
-			#sed -i -r 's@^\s*INCLUDE\s*=.+@INCLUDE = $CONDA_PREFIX/include@' config.in && \
-			#sed -i -r 's@^\s*LIB\s*=.+@LIB = $CONDA_PREFIX/lib@' config.in && \
-			#make -j $THREADS && \
-			#make install && \
-			#cd .. && \
-			cpanm -l /dev/null --force --self-contained --scandeps --save-dists $PWD/src Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple && \
-			cpanm --self-contained --reinstall --mirror file://$PWD/src Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple && \
-			return 0
-		} || return 1
-	else
-		{	mkdir -p src && \
-			cpanm -l /dev/null --force --self-contained --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
-			cpanm -l $PWD --self-contained --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
-			return 0
-		} || return 1
-	fi
+TOOL=perl-packages         # cpanminus + Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
+install_perl-packages() {
+	# XML::Parser requires expat
+	local url version
+	{	url='cpanmin.us' && \
+		wget $url -O cpanm && chmod 755 cpanm && \
+		version=$(./cpanm -v 2>&1 | head -1 | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
+		mv cpanm cpanm_$version && \
+		ln -sfn cpanm_$version cpanm && \
+		mkdir -p src && \
+		./cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+		./cpanm -l $PWD --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+		return 0
+	} || return 1
 }
 [[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
 
@@ -655,6 +586,28 @@ install_spotify() {
 		Type=Application
 		Icon=$DIR/$TOOL/latest/icons/spotify-linux-256.png
 		StartupWMClass=Spotify
+	EOF
+	return 0
+}
+[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+
+TOOL=skype                 # !!! may fail to be installed on some systems
+install_skype() {
+	local url
+	{	url='https://go.skype.com/skypeforlinux-64.deb' && \
+		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		rm -rf opt latest && \
+		mv usr latest && \
+		BIN=latest/bin
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-skype.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Skype
+		Exec=$DIR/$TOOL/$BIN/skypeforlinux
+		Type=Application
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/skypeforlinux.png
+		StartupWMClass=Skype
 	EOF
 	return 0
 }
