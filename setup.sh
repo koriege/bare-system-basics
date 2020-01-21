@@ -428,7 +428,7 @@ install_conda-dev() {
 	{	conda create -y -n $name python=3 && \
 		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
 			gcc_linux-64 make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript datamash \
-			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl \
+			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl perl-bio-eutilities \
 			rstudio r-devtools bioconductor-biocinstaller bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 \
 			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
 		conda clean -y -a && \
