@@ -20,7 +20,7 @@ die() {
 DIR=$HOME/programs
 SOURCE=$DIR/SOURCE.me
 THREADS=$(cat /proc/cpuinfo | grep -cF processor)
-OPT='all'
+declare -A OPT=([all]=1)
 
 ############### FUNCTIONS ###############
 
@@ -32,7 +32,7 @@ usage() {
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.2.0
+		0.2.1
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -41,7 +41,8 @@ usage() {
 		-h | --help           # prints this message
 		-d | --dir [path]     # installation path - default: $DIR
 		-t | --threads [num]  # threads to use for comilation - default: $THREADS
-		-i | --install [tool] # tool to install/update (see below) - default: all, but conda-dev
+		-i | --install [tool] # tool(s) to install/update (comma seperated, see below) - default: "all"
+		                      # "conda-env" needs to be setupped this way explicitly
 
 		TOOLS
 		$tools
@@ -73,7 +74,7 @@ checkopt() {
 	case $1 in
 		-h | --h | -help | --help) usage;;
 		-t | --t | -threads | --threads) arg=true; THREADS=$2;;
-		-i | --i | -install | --install) arg=true; OPT=$2;;
+		-i | --i | -install | --install) arg=true; OPT=(); mapfile -d ',' -t <<< $2 ; for t in "${MAPFILE[@]}"; do t=$(printf "%s" $t); OPT[$t]=1; done;;
 		-d | --d | -dir | --dir) arg=true; DIR=$2; SOURCE=$DIR/SOURCE.me; [[ $(mkdir -p $DIR &> /dev/null; echo $?) -gt 0 ]] && die 'check your installation path';;
 		-*) die "illegal option $1";;
 		*) die "illegal option $2";;
@@ -164,7 +165,7 @@ TOOL=google-chrome         # google chrome webbrowser
 install_google-chrome() {
 	local url version
 	{	url='https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb' && \
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		version=$(opt/google/chrome/google-chrome --version | perl -lane '$_=~/([\d.]+)/; print $1') && \
 		rm -rf $version && mv opt $version && rm -rf usr && rm -rf etc && \
 		ln -sfn $version latest && \
@@ -181,7 +182,7 @@ install_google-chrome() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=vivaldi               # sophisticated chrome based webbrowser - highly recommended :)
 install_vivaldi() {
@@ -189,7 +190,7 @@ install_vivaldi() {
 	{	url=$(curl -s https://vivaldi.com/download/archive/?platform=linux| grep -Eo 'http[^"]+vivaldi-stable[^"]+amd64.deb' | sort -V | tail -1) && \
 		version=$(echo $url | perl -lane '$_=~/stable_([^_]+)/; print $1') && \
 		echo $version && \
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf $version  && mv opt $version && rm -rf usr && rm -rf etc && \
 		ln -sfn $version latest && \
 		BIN=latest/vivaldi
@@ -205,7 +206,7 @@ install_vivaldi() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=opera                 # chrome based webbrowser with vpn
 install_opera() {
@@ -213,7 +214,7 @@ install_opera() {
 	{	version=$(curl -s https://get.geo.opera.com/pub/opera/desktop/ | grep -oE 'href="[^"\/]+' | tail -1 | cut -d '"' -f2) && \
         url="https://get.geo.opera.com/pub/opera/desktop/$version/linux/opera-stable_${version}_amd64.deb"
 		echo $version && \
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf $version && mv usr $version && \
 		ln -sfn $version latest && \
 		BIN=latest/bin
@@ -229,14 +230,14 @@ install_opera() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=firefox               # updates via interface possible. firefox webbrowser
 install_firefox() {
 	local url version
 	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/firefox/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
 		url="https://ftp.mozilla.org/pub/firefox/releases/$version/linux-x86_64/en-US/firefox-$version.tar.bz2" && \
-		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
 		rm -rf $version && mv firefox* $version && \
 		ln -sfn $version latest && \
 		BIN=latest
@@ -252,7 +253,7 @@ install_firefox() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=thunderbird           # updates itself. thunderbird email tool
 install_thunderbird() {
@@ -260,7 +261,7 @@ install_thunderbird() {
 	# https://ftp.mozilla.org/pub/thunderbird/candidates/
 	{	version=$(basename $(curl -s https://ftp.mozilla.org/pub/thunderbird/releases/ | grep -Eo 'releases/[0-9][^"]+' | grep -Ev 'b[0-9]' | sort -V | tail -1)) && \
 		url="https://ftp.mozilla.org/pub/thunderbird/releases/$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2" && \
-		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
 		rm -rf $version && mv thunderbird* $version && \
 		ln -sfn $version latest && \
 		BIN=latest
@@ -276,16 +277,16 @@ install_thunderbird() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=keeweb               # keepass db compatible password manager with cloud sync support
+TOOL=keeweb                # keepass db compatible password manager with cloud sync support
 install_keeweb() {
 	local url version
 	{	url='https://github.com'$(curl -s https://github.com/keeweb/keeweb/releases | grep -m 1 -Eo '[^"]+linux.x64.zip') && \
 		version=$(basename $(dirname $url)) && \
         version=${version:1} && \
         rm -rf $version && mkdir $version && \
-		wget $url -O $TOOL.zip && unzip -q $TOOL.zip -d $version && rm $TOOL.zip && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip && unzip -q $TOOL.zip -d $version && rm $TOOL.zip && \
 		ln -sfn $version latest && \
 		BIN=latest
 	} || return 1
@@ -300,14 +301,14 @@ install_keeweb() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=java                  # oracle java 11 runtime and development kit
 install_java() {
 	local url version
 	{	url="https://download.oracle.com/otn-pub/java/jdk/13.0.2+8/d4173c853231432d94f001e99d882ca7/jdk-13.0.2_linux-x64_bin.tar.gz" && \
 		version=$(echo $url | perl -lane '$_=~/jdk-([^-_]+)/; print $1') && \
-		wget --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
 		tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mv jdk* $version && \
 		ln -sfn $version latest && \
@@ -315,14 +316,14 @@ install_java() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=master-pdf-editor     # nice pdf viewer and editor
 install_master-pdf-editor() {
 	local url version
 	{	url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -Eo 'http[^"]+qt5.amd64.tar.gz') && \
 		version=$(echo $url | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
-		wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mv master-pdf-editor* $version && \
 		ln -sfn $version latest && \
 		BIN=latest
@@ -338,14 +339,14 @@ install_master-pdf-editor() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=sublime               # very powerful text editor and integrated developer environment for all languages
 install_sublime() {
 	local url version
 	{	url=$(curl -s  https://www.sublimetext.com/3 | grep -Eo 'http[^"]+x64.tar.bz2') && \
 		version=$(echo $url | perl -lane '$_=~/build_([^_]+)/; print $1') && \
-		wget $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2 && tar -xjf $TOOL.tar.bz2 && rm $TOOL.tar.bz2 && \
 		rm -rf $version && mv sublime* $version && \
 		ln -sfn sublime_text $version/subl && \
 		ln -sfn $version latest && \
@@ -362,14 +363,14 @@ install_sublime() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=sublime-merge         # very powerful git client
 install_sublime-merge() {
 	local url version
 	{	url=$(curl -s https://www.sublimemerge.com/download | grep -Eo 'http[^"]+x64.tar.xz' | sort -V | tail -1) && \
 		version=$(echo $url | perl -lane '$_=~/build_([^_]+)/; print $1') && \
-		wget $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
 		rm -rf $version && mv sublime* $version && \
 		ln -sfn sublime_text $version/sublmerge && \
 		ln -sfn $version latest && \
@@ -386,13 +387,13 @@ install_sublime-merge() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=adb                   # minimal installation of android debugging bridge and sideload
 install_adb() {
 	local url version
 	{	url='https://dl.google.com/android/repository/platform-tools-latest-linux.zip' && \
-		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
 		version=$(platform-tools*/adb version | grep -F version | cut -d ' ' -f 5) && \
 		mv platform-tools* $version && \
 		ln -sfn $version latest && \
@@ -400,14 +401,14 @@ install_adb() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=conda                 # root less package control software
 install_conda() {
 	unset BIN
 	local url version
 	{	url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh' && \
-		wget $url -O miniconda.sh && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O miniconda.sh && \
 		version=$(bash miniconda.sh -h | grep -F Installs | cut -d ' ' -f 3) && \
 		rm -rf $version && \
 		bash miniconda.sh -b -f -p $version && \
@@ -416,34 +417,34 @@ install_conda() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=conda-dev             # setup dev env via conda. perl + packages , r + packages, rstudio, datamash, gcc, pigz, htslib
 install_conda-dev() {
 	[[ -n $CONDA_PREFIX ]] || die 'please activate conda first'
 	local name="py3_dev_$(date +%F)"
-	conda env remove -n $name || die 'please switch to base environment'
+	conda env remove -y -n $name || die 'please switch to base environment'
 	conda config --set changeps1 False
 	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
 	{	conda create -y -n $name python=3 && \
 		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
-			gcc_linux-64 make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript datamash \
+			gcc_linux-64 readline make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript datamash \
 			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl perl-bio-eutilities \
-			rstudio r-devtools bioconductor-biocinstaller bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 \
+			rstudio r-codetools r-devtools bioconductor-biocinstaller bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 \
 			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
 		conda clean -y -a && \
 		FOUND=true && \
 		return 0
 	} || return 1
 }
-[[ $OPT == $TOOL ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
+[[ ${OPT[$TOOL]} ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
 TOOL=perl-packages         # cpanminus + Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
 install_perl-packages() {
 	# XML::Parser requires expat
 	local url version
 	{	url='cpanmin.us' && \
-		wget $url -O cpanm && chmod 755 cpanm && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O cpanm && chmod 755 cpanm && \
 		version=$(./cpanm -v 2>&1 | head -1 | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
 		mv cpanm cpanm_$version && \
 		ln -sfn cpanm_$version cpanm && \
@@ -453,14 +454,14 @@ install_perl-packages() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=htop                  # graphical task manager
 install_htop() {
 	local url version
 	{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -r 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
 		url="http://hisham.hm/htop/releases/$version/htop-$version.tar.gz" && \
-		wget $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mv htop* $version && \
 		cd $version && \
 		./configure --prefix=$PWD && \
@@ -472,7 +473,7 @@ install_htop() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=jabref                # references/citations manager
 install_jabref() {
@@ -481,7 +482,7 @@ install_jabref() {
 		version=$(basename $url .jar | cut -d '-' -f 2-) && \
 		rm -rf $version && mkdir -p $version && \
 		cd $version && \
-		wget $url -O jabref.jar && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O jabref.jar && \
 		mkdir -p bin && \
 		javawrapper bin/jabref $PWD/jabref.jar && \
 		cd .. && \
@@ -490,7 +491,7 @@ install_jabref() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=igv                   # !!! needs java 11 (setup -i java). interactive genome viewer
 install_igv() {
@@ -498,7 +499,7 @@ install_igv() {
 	{	url=$(curl -s https://software.broadinstitute.org/software/igv/download | grep -Eo 'href="[^"]+\.zip' | grep -vF -e Linux -e app.zip | cut -d '"' -f 2) && \
 		version=$(basename $url .zip | cut -d '_' -f 2-) && \
 		rm -rf $version && \
-		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
 		mv IGV* $version && \
 		cd $version && \
 		mem=$(grep -F -i memavailable /proc/meminfo | awk '{printf("%d",$2*0.8/1024/1024)}') && \
@@ -513,7 +514,7 @@ install_igv() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=tilix                 # best terminal emulator
 install_tilix() {
@@ -522,7 +523,7 @@ install_tilix() {
 		version=$(basename $(dirname $url)) && \
 		rm -rf $version && mkdir -p $version && \
 		cd $version  && \
-		wget $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
 		mv usr/* . && rm -rf usr && \
 		glib-compile-schemas share/glib-*/schemas/
 		touch bin/tilix.sh && \
@@ -550,14 +551,14 @@ install_tilix() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=meld                  # compare files
 install_meld() {
 	local url version
 	{	url=$(curl -s http://meldmerge.org/ | grep -Eo '^\s*<a href="[^"]+' | grep sources | sed -r 's/\s*<a href="//' | sort -V | tail -1) && \
 		version=$(basename $(dirname $url)) && \
-		wget $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
 		rm -rf $version && \
 		mv meld* $version && \
 		ln -sfn $version latest && \
@@ -565,7 +566,7 @@ install_meld() {
 		return 0
 	} || return 1
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=spotify               # spotify - may need sudo ln -sf /usr/lib64/libcurl.so.4 /usr/lib64/libcurl-gnutls.so.4
 install_spotify() {
@@ -573,7 +574,7 @@ install_spotify() {
 	{	url='https://repository-origin.spotify.com/pool/non-free/s/spotify-client/'$(curl -s https://repository-origin.spotify.com/pool/non-free/s/spotify-client/ | grep -oE 'spotify-client[^"]+_amd64.deb' | sort -V | tail -1)
 		version=$(basename $url | cut -d '_' -f 2)
 		version=${version%.*}
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.gz | tar xz && rm $TOOL.deb && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.gz | tar xz && rm $TOOL.deb && \
 		rm -rf $version  && mv usr/share/spotify $version && rm -rf usr && rm -rf etc && \
 		ln -sfn $version latest && \
 		BIN=latest
@@ -589,13 +590,13 @@ install_spotify() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 TOOL=skype                 # !!! may fail to be installed on some systems
 install_skype() {
 	local url
 	{	url='https://go.skype.com/skypeforlinux-64.deb' && \
-		wget $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf opt latest && \
 		mv usr latest && \
 		BIN=latest/bin
@@ -611,7 +612,7 @@ install_skype() {
 	EOF
 	return 0
 }
-[[ $OPT == 'all' ]] || [[ $OPT == $TOOL ]] && run install_$TOOL
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
 ${FOUND:=false} && {
 	cat <<- EOF
@@ -619,5 +620,5 @@ ${FOUND:=false} && {
 		:INFO: to load tools read usage INFO section! execute '$(basename $0) -h'
 	EOF
 } || {
-	die "$OPT not found"
+	die "${!OPT[@]}" " not found"
 }
