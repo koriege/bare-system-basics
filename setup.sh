@@ -189,7 +189,6 @@ install_vivaldi() {
 	local url version
 	{	url=$(curl -s https://vivaldi.com/download/archive/?platform=linux| grep -Eo 'http[^"]+vivaldi-stable[^"]+amd64.deb' | sort -V | tail -1) && \
 		version=$(echo $url | perl -lane '$_=~/stable_([^_]+)/; print $1') && \
-		echo $version && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf $version  && mv opt $version && rm -rf usr && rm -rf etc && \
 		ln -sfn $version latest && \
@@ -213,7 +212,6 @@ install_opera() {
 	local url version
 	{	version=$(curl -s https://get.geo.opera.com/pub/opera/desktop/ | grep -oE 'href="[^"\/]+' | tail -1 | cut -d '"' -f2) && \
         url="https://get.geo.opera.com/pub/opera/desktop/$version/linux/opera-stable_${version}_amd64.deb"
-		echo $version && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
 		rm -rf $version && mv usr $version && \
 		ln -sfn $version latest && \
@@ -225,7 +223,7 @@ install_opera() {
 		Name=Opera
 		Exec=$DIR/$TOOL/$BIN/opera %U
 		Type=Application
-		Icon=$DIR/$TOOL/share/icons/hicolor/256x256/apps/opera.png
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/256x256/apps/opera.png
 		StartupWMClass=Opera
 	EOF
 	return 0
@@ -525,7 +523,7 @@ install_tilix() {
 		cd $version  && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip && unzip -q $TOOL.zip && rm $TOOL.zip && \
 		mv usr/* . && rm -rf usr && \
-		glib-compile-schemas share/glib-*/schemas/
+		glib-compile-schemas share/glib-*/schemas/ && \
 		touch bin/tilix.sh && \
 		chmod 755 bin/* && \
 		inkscape -D -w 256 -h 256 -e share/icons/hicolor/icon.png share/icons/hicolor/scalable/apps/com.gexperts.Tilix.svg && \
