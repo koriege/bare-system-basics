@@ -292,7 +292,7 @@ install_keeweb() {
 		[Desktop Entry]
 		Terminal=false
 		Name=KeeWeb
-		Exec=$DIR/$TOOL/$BIN/KeeWeb
+		Exec=$DIR/$TOOL/$BIN/keeweb
 		Type=Application
 		Icon=$DIR/$TOOL/$BIN/128x128.png
 		StartupWMClass=KeeWeb
@@ -612,7 +612,7 @@ install_skype() {
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=onlyoffice            # !!! may fail to be installed on some systems
+TOOL=onlyoffice            # best ms office clone available
 install_onlyoffice() {
 	local url
 	{	url='http://download.onlyoffice.com/install/desktop/editors/linux/DesktopEditors-x86_64.AppImage' && \
