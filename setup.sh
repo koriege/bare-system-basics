@@ -1,20 +1,17 @@
 #! /usr/bin/env bash
 # (c) Konstantin Riege
-
-set -e
-shopt -s extglob
-trap 'die' INT TERM
-#trap 'kill -PIPE 0' EXIT # kills parental processes as well - shlog conflict
-#trap 'kill -PIPE -- -$$' EXIT # kill all childs - works only if $$ is process group leader
-#trap 'kill -PIPE $(jobs -p)' EXIT # same as above
-trap 'kill -PIPE $(pstree -p $$ | grep -Eo "\([0-9]+\)" | grep -Eo "[0-9]+") &> /dev/null' EXIT # parse pstree
-# AVOID DOUBLE FORKS -> run(){cmd &}; run & -> i.e. cmd gets new process group and cannot be killed
+trap '
+	sleep 1
+	pids=($(pstree -p $$ | grep -Eo "\([0-9]+\)" | grep -Eo "[0-9]+" | tail -n +2))
+	{ kill -KILL "${pids[@]}" && wait "${pids[@]}"; } &> /dev/null
+	printf "\r"
+' EXIT
+trap 'die "killed by sigint or sigterm"' INT TERM
 
 die() {
-	[[ $* ]] && echo ":ERROR: $*" || echo ":ERROR: failed"
+	echo ":ERROR: $*" >&2
 	exit 1
 }
-
 ############### GLOBAL VARS ###############
 
 DIR=$HOME/programs
@@ -32,7 +29,7 @@ usage() {
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.2.1
+		0.2.2
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -89,7 +86,7 @@ checkopt() {
 	}
 }
 
-setup_cron () {
+setup_cron() {
 	crontab -r &> /dev/null
 	# <minute> <hour> <day of month> <month> <day of week> <command>
 	src=$(cd $(dirname $0) && echo $PWD)
@@ -98,18 +95,21 @@ setup_cron () {
 }
 #setup_cron
 
-run () {
+run() {
 	FOUND=true
-	# backup
-	mkdir -p $DIR/$TOOL && cd $DIR/$TOOL
-	$1 || die $TOOL
+	unset BIN
+	{	mkdir -p $DIR/$TOOL && \
+		cd $DIR/$TOOL && \
+		$1
+	} || die $TOOL
 	# adapt source
 	touch $SOURCE
-	if [[ $BIN && ! $(grep "$DIR/$TOOL/$BIN" $SOURCE) ]]; then 
-		sed -i "/PATH=/d;" $SOURCE
+	[[ $BIN ]] && {
+		sed -i "/PATH=/d" $SOURCE
+		sed -i "\@$DIR/$TOOL@d" $SOURCE #\@ necessary for path matches - s@/dir/path/@replacement@ is okay , @/dir/path/@d not
 		echo 'VAR=$VAR:'"$DIR/$TOOL/$BIN" >> $SOURCE
 		echo 'PATH=$VAR:$PATH' >> $SOURCE
-	fi
+	}
 
 	return 0
 }
@@ -457,7 +457,7 @@ install_perl-packages() {
 TOOL=htop                  # graphical task manager
 install_htop() {
 	local url version
-	{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -r 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
+	{	version=$(curl -s http://hisham.hm/htop/releases/ | grep -Eo '^\s*<a href="[^"]+' | sed -E 's/\s*<a href="([^\/]+)\//\1/' | sort -V | tail -1) && \
 		url="http://hisham.hm/htop/releases/$version/htop-$version.tar.gz" && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mv htop* $version && \
@@ -554,7 +554,7 @@ install_tilix() {
 TOOL=meld                  # compare files
 install_meld() {
 	local url version
-	{	url=$(curl -s http://meldmerge.org/ | grep -Eo '^\s*<a href="[^"]+' | grep sources | sed -r 's/\s*<a href="//' | sort -V | tail -1) && \
+	{	url=$(curl -s http://meldmerge.org/ | grep -Eo '^\s*<a href="[^"]+' | grep sources | sed -E 's/\s*<a href="//' | sort -V | tail -1) && \
 		version=$(basename $(dirname $url)) && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz && tar -xf $TOOL.tar.xz && rm $TOOL.tar.xz && \
 		rm -rf $version && \
@@ -611,6 +611,35 @@ install_skype() {
 	return 0
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=onlyoffice            # !!! may fail to be installed on some systems
+install_onlyoffice() {
+	local url
+	{	url='http://download.onlyoffice.com/install/desktop/editors/linux/DesktopEditors-x86_64.AppImage' && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.AppImage && \
+		chmod 755 $TOOL.AppImage && \
+		version=$(./$TOOL.AppImage --version 2>&1 | tail -n 1 | rev | cut -d ' ' -f 1 | rev) && \
+		rm -rf $version && \
+		./$TOOL.AppImage --appimage-extract && \
+		mv squashfs-root $version && \
+		mv $version/AppRun $version/onlyoffice && \
+		rm -f $TOOL.AppImage && \
+		ln -sfn $version latest && \
+		BIN=latest
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-onlyoffice.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=Onlyoffice
+		Exec=$DIR/$TOOL/$BIN/onlyoffice
+		Type=Application
+		Icon=$DIR/$TOOL/latest/asc-de.png
+		StartupWMClass=DesktopEditors
+	EOF
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
 
 ${FOUND:=false} && {
 	cat <<- EOF
