@@ -6,7 +6,7 @@ trap '
 	{ kill -KILL "${pids[@]}" && wait "${pids[@]}"; } &> /dev/null
 	printf "\r"
 ' EXIT
-trap 'die "killed by sigint or sigterm"' INT TERM
+trap 'die "killed"' INT TERM
 
 die() {
 	echo ":ERROR: $*" >&2
@@ -18,6 +18,7 @@ DIR=$HOME/programs
 SOURCE=$DIR/SOURCE.me
 THREADS=$(cat /proc/cpuinfo | grep -cF processor)
 declare -A OPT=([all]=1)
+export MAKEFLAGS="-j $THREADS"
 
 ############### FUNCTIONS ###############
 
@@ -29,7 +30,7 @@ usage() {
 		!!! we <3 a space-free file-paths !!!
 
 		VERSION
-		0.2.2
+		0.3.0
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -38,7 +39,7 @@ usage() {
 		-h | --help           # prints this message
 		-d | --dir [path]     # installation path - default: $DIR
 		-t | --threads [num]  # threads to use for comilation - default: $THREADS
-		-i | --install [tool] # tool(s) to install/update (comma seperated, see below) - default: "all"
+		-i | --install [tool] # tool(s) to install/update (comma seperated, see below) - default: "all" except conda-env and *-libs
 		                      # "conda-env" needs to be setupped this way explicitly
 
 		TOOLS
@@ -49,10 +50,11 @@ usage() {
 		- define StartupWMClass in .desktop file
 		- assign value by executing 'xprop WM_CLASS' + click on window
 
-		2) how to execute tools installed via conda
+		2) how to use conda tools and non-conda libraries
 		- to load conda itself, execute 'source $DIR/conda/latest/bin/activate'
 		- to load conda tools execute 'conda env list', and 'conda activate [env]'
-		- to load non-conda installed perl-modules execute 'export PERL5LIB=$DIR/perl-modules/lib/perl5'
+		- to load non-conda installed perl packages execute 'export PERL5LIB=$DIR/perl-libs/<version>/lib/perl5'
+		- to load non-conda installed r packages execute 'export R_LIBS=$DIR/r-libs/<version>'
 		
 		3) to define a tool as default application
 		- adapt ~/.config/mimeapps.list
@@ -304,7 +306,8 @@ install_keeweb() {
 TOOL=java                  # oracle java 11 runtime and development kit
 install_java() {
 	local url version
-	{	url="https://download.oracle.com/otn-pub/java/jdk/13.0.2+8/d4173c853231432d94f001e99d882ca7/jdk-13.0.2_linux-x64_bin.tar.gz" && \
+	# under forced login: url="https://download.oracle.com/otn-pub/java/jdk/13.0.2+8/d4173c853231432d94f001e99d882ca7/jdk-13.0.2_linux-x64_bin.tar.gz"
+	{	url="https://download.oracle.com/otn-pub/java/jdk/14.0.2+12/205943a0976c4ed48cb16f1043c5c647/jdk-14.0.2_linux-x64_bin.tar.gz" && \
 		version=$(echo $url | perl -lane '$_=~/jdk-([^-_]+)/; print $1') && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz && \
 		tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
@@ -405,7 +408,9 @@ TOOL=conda                 # root less package control software
 install_conda() {
 	unset BIN
 	local url version
-	{	url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh' && \
+	# conda >= 4.7 may leads to failed with initial frozen solve issue
+	{	url='https://repo.anaconda.com/miniconda/Miniconda3-4.6.14-Linux-x86_64.sh' && \
+		url='https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh' && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O miniconda.sh && \
 		version=$(bash miniconda.sh -h | grep -F Installs | cut -d ' ' -f 3) && \
 		rm -rf $version && \
@@ -417,42 +422,107 @@ install_conda() {
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=conda-dev             # setup dev env via conda. perl + packages , r + packages, rstudio, datamash, gcc, pigz, htslib
-install_conda-dev() {
+TOOL=conda-env             # setup dev env via conda. perl + packages ,r , datamash, gcc, pigz, htslib
+install_conda-env() {
 	[[ -n $CONDA_PREFIX ]] || die 'please activate conda first'
 	local name="py3_dev_$(date +%F)"
 	conda env remove -y -n $name || die 'please switch to base environment'
 	conda config --set changeps1 False
-	# macs2, tophat2/hisat2 and R stuff needs python2 whereas cutadapt,idr,rseqc need python3 env
+	
+	# XML::Parser requires expat
+	# ggpubr requires nlopt
 	{	conda create -y -n $name python=3 && \
 		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
-			gcc_linux-64 readline make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript datamash \
+			gcc_linux-64 readline make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript \
 			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl perl-bio-eutilities \
-			rstudio r-codetools r-devtools bioconductor-biocinstaller bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 \
-			r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
-		conda clean -y -a && \
-		FOUND=true && \
-		return 0
+			numpy scipy pysam cython matplotlib \
+			datamash \
+			r-base nlopt && \
+			# rstudio
+			# r-codetools r-devtools r-biocmanager bioconductor-biocinstaller
+			# bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 bioconductor-tcgautils bioconductor-tcgabiolinks \
+			# r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
+		conda clean -y -a
+		# rstudio is old and in r channel whereas r-base in actively maintained in conda-forge
+		# for latest R use external rstudio and compile libs manually
+		# when using conda rstudio there will be clashing r channel rstuio/r-base R version and other channel librarys R built versions
+		# -> either re-compile corrupt packages and ignore built version warnings (see here-doc below)
+		# -> or compile libs manually
 	} || return 1
+
+	# cat <<-EOF
+	# 	Please note:
+	# 	If you encounter troubles loading R libraries, try to manually re-install corrupt packages
+	# 	conda activate $name
+	# 	rm -rf /ssd/data/programs/conda/$version/envs/$name/lib/R/library/stringi
+	# 	Rscript -e "install.packages('stringi', repos='http://cloud.r-project.org')"
+	# EOF
+
+	FOUND=true
+	return 0
 }
 [[ ${OPT[$TOOL]} ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
-TOOL=perl-packages         # cpanminus + Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
-install_perl-packages() {
-	# XML::Parser requires expat
-	local url version
-	{	url='cpanmin.us' && \
-		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O cpanm && chmod 755 cpanm && \
-		version=$(./cpanm -v 2>&1 | head -1 | perl -lane '$_=~/(\d[\d.]+)/; print $1') && \
-		mv cpanm cpanm_$version && \
-		ln -sfn cpanm_$version cpanm && \
-		mkdir -p src && \
-		./cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
-		./cpanm -l $PWD --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
-		return 0
-	} || return 1
+TOOL=r-libs                # conda/non-conda: dplyr tidyverse ggpubr ggplot2 gplots RColorBrewer svglite pheatmap data.table BiocParallel genefilter DESeq2 TCGAutils TCGAbiolinks
+install_r-libs() {
+	mkdir -p src
+	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
+		{	Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
+			Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); devtools::install_github(c('andymckenzie/DGCA'), Ncpus=$THREADS, upgrade='never', force=T, clean=T, destdir='$PWD/src')" && \
+			if [[ $(conda list -n $name -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src')" && \
+				return 0
+			else
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src')" && \
+				return 0
+			fi		
+		} || return 1
+	else
+		local x version
+		read -r -p ':WARNING: current environment may not fulfill all prerequisites and dependencies. please try with an activated conda environment or continue? (y|n): ' x
+		[[ $x == "n" ]] && return 0
+		version=$(Rscript --version 2>&1 | awk '{print $(NF-1)}')
+		mkdir -p $version
+		{	Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+			Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); devtools::install_github(c('andymckenzie/DGCA'), Ncpus=$THREADS, upgrade='never', force=T, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+			if [[ $(conda list -n $name -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+				return 0
+			else
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && 
+				return 0
+			fi
+		} || return 1
+	fi
 }
-[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+[[ ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=perl-libs             # conda/non-conda: Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
+install_perl-libs() {
+	mkdir -p src
+	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
+		{	cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			cpanm --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			return 0
+		} || return 1
+	else
+		local x url
+		read -r -p ':WARNING: current environment may not fulfill all prerequisites and dependencies. please try with an activated conda environment or continue? (y|n): ' x
+		[[ $x == "n" ]] && return 0
+		version=$(perl --version | head -2 | tail -1 | sed -E 's/.+\(v(.+)\).+/\1/')
+		mkdir -p $version
+		{	url='cpanmin.us' && \
+			wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O cpanm && \
+			chmod 755 cpanm && \
+			./cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			./cpanm -l $PWD/$version --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			return 0
+		} || return 1
+	fi
+}
+[[ ${OPT[$TOOL]} ]] && run install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
 TOOL=htop                  # graphical task manager
 install_htop() {
@@ -507,8 +577,8 @@ install_igv() {
 		cd bin && \
 		ln -sfn ../igv.sh igv && \
 		cd ../.. && \
-		ln -sfn $version/bin latest && \
-		BIN=latest && \
+		ln -sfn $version latest && \
+		BIN=latest/bin && \
 		return 0
 	} || return 1
 }
