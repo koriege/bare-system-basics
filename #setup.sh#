@@ -741,7 +741,7 @@ install_onlyoffice(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=emacs                 # emacs rulez
+TOOL=emacs                # emacs rulez
 install_emacs(){
 	local url version tool
 	{	url='http://ftp.gnu.org/gnu/emacs/' && \
@@ -763,7 +763,7 @@ install_emacs(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=emacs-addons         # ralee-mode, neotree, ess
+TOOL=emacs-addons
 install_emacs-addons(){
 	{	tool=ralee && \
 		mkdir -p $tool && \
