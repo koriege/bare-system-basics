@@ -18,8 +18,8 @@ Copyleft (C) 2020, Konstantin Riege
 ---
 
 ```
-setup.sh -h
-setup.sh -i [tool|all] -d <installpath>
+bsb.sh -h
+bsb.sh -i [tool|all] -d <installpath>
 source <installpath>/SOURCE.me
 ```
 
