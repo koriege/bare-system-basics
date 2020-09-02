@@ -12,6 +12,7 @@ die(){
 	echo ":ERROR: $*" >&2
 	exit 1
 }
+
 ############### GLOBAL VARS ###############
 
 DIR=$HOME/programs
@@ -26,8 +27,8 @@ usage(){
 	local tools=$(grep '^TOOL=' $0 | cut -d '=' -f 2)
 	cat <<- EOF
 		DESCRIPTION
-		$(basename $0) brings software locally to your linux computer
-		!!! we <3 a space-free file-paths !!!
+		bare-system-basics brings software locally to your linux computer
+		!!! we <3 space-free file-paths !!!
 
 		VERSION
 		0.3.1
@@ -46,23 +47,25 @@ usage(){
 		$tools
 
 		INFO
-		1) to group multiple windows in gnome application dock
-		- define StartupWMClass in .desktop file
-		- assign value by executing 'xprop WM_CLASS' + click on window
-
-		2) how to use conda tools and non-conda libraries
+		1) how to use conda tools and non-conda libraries
 		- to load conda itself, execute 'source $DIR/conda/latest/bin/activate'
 		- to load conda tools execute 'conda env list', and 'conda activate [env]'
 		- to load non-conda installed perl packages execute 'export PERL5LIB=$DIR/perl-libs/<version>/lib/perl5'
 		- to load non-conda installed r packages execute 'export R_LIBS=$DIR/r-libs/<version>'
-		
-		3) to define a tool as default application
+
+		2) to define a tool as default application
 		- adapt ~/.config/mimeapps.list
 		- adapt ~/.local/share/applications/mimeapps.list
 
+		3) in case of onlyoffice scaling issues
+		- adjust QT settings in ~/.local/share/applications/my-onlyoffice.desktop
+
+		4) to group multiple windows in gnome application dock
+		- define StartupWMClass in .desktop file
+		- assign value by executing 'xprop WM_CLASS' + click on window
+
 		REFERENCES
 		(c) Konstantin Riege
-		konstantin{.}riege{a}leibniz-fli{.}de
 	EOF
 
 	exit 0
@@ -107,37 +110,27 @@ run(){
 	return 0
 }
 
-javawrapper(){
-	cat <<- EOF > $1 || return 1
+javawrapper() {
+	local java=java
+	[[ $3 ]] && java="$3"
+	cat <<- EOF > "$1" || return 1
 		#!/usr/bin/env bash
-		set -eu -o pipefail
-		export LC_ALL=en_US.UTF-8
-		java=java
-		if [[ -n \$JAVA_HOME ]]; then
-		    if [[ -e \$JAVA_HOME/bin/java ]]; then
-		        java=\$JAVA_HOME/bin/java
-		    fi
-		fi
-		jvm_mem_opts=""
-		jvm_prop_opts=""
-		pass_args=""
+		java=$java
+		[[ \$JAVA_HOME && -e "\$JAVA_HOME/bin/java" ]] && java="\$JAVA_HOME/bin/java"
+		declare -a jvm_mem_args jvm_prop_args pass_args
 		for arg in \$@; do
 			case \$arg in
-				'-D'*) jvm_prop_opts="\$jvm_prop_opts \$arg";;
-				'-XX'*) jvm_prop_opts="\$jvm_prop_opts \$arg";;
-				'-Xm'*) jvm_mem_opts="\$jvm_mem_opts \$arg";;
+				-D*) jvm_prop_args+=("\$arg");;
+				-XX*) jvm_prop_args+=("\$arg");;
+				-Xm*) jvm_mem_args+=("\$arg");;
+				*) pass_args+=("\$arg");;
 			esac
 		done
-		[[ ! \$jvm_mem_opts ]] && jvm_mem_opts="-Xms512m -Xmx1g"
-		pass_arr=(\$pass_args)
-		if [[ \${pass_arr[0]} == org* ]]; then
-		    eval \$java \$jvm_mem_opts \$jvm_prop_opts -cp $2 \$pass_args
-		else
-		    eval \$java \$jvm_mem_opts \$jvm_prop_opts -jar $2 \$pass_args
-		fi
-		exit
+		[[ ! \$jvm_mem_args ]] && jvm_mem_args+=("-Xms1024m") && jvm_mem_args+=("-Xmx4g")
+		exec "\$java" "\${jvm_mem_args[@]}" "\${jvm_prop_args[@]}" -jar "$2" "\${pass_args[@]}"
 	EOF
-	chmod 755 $1 || return 1
+	chmod 755 "$1" || return 1
+	
 	return 0
 }
 
@@ -149,7 +142,7 @@ for i in $(seq 1 $#); do
 	if [[ ${!i} =~ ^- ]]; then
 		j=$((i+1))
 		checkopt "${!i}" "${!j}" || die
-	else 
+	else
 		((++i))
 	fi
 done
@@ -261,7 +254,7 @@ install_firefox(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=thunderbird           # updates itself. thunderbird email tool
+TOOL=thunderbird           # updates itself. thunderbird email tool - best until vivaldi m3 is released
 install_thunderbird(){
 	local url version
 	{	url='https://ftp.mozilla.org/pub/thunderbird/releases/' && \
@@ -327,7 +320,7 @@ install_java(){
 TOOL=pdf-editor4           # master pdf viewer and editor v4 (latest without watermark)
 install_pdf-editor4(){
 	local url version
-	#url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -Eo 'http[^"]+qt5.amd64.tar.gz') 
+	#url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -Eo 'http[^"]+qt5.amd64.tar.gz')
 	{	url='http://code-industry.net/public/master-pdf-editor-4.3.89_qt5.amd64.tar.gz' && \
 		version=$(basename $url | sed -E 's/master-pdf-editor-([0-9\.]+).+/\1/') && \
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
@@ -348,7 +341,7 @@ install_pdf-editor4(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=pdf-editor5           # master pdf viewer and editor v4 (latest without watermark)
+TOOL=pdf-editor5           # master pdf viewer and editor v5
 install_pdf-editor5(){
 	local url version
 	{	url=$(curl -s https://code-industry.net/free-pdf-editor/ | grep -oE 'http\S+qt5\S+\.tar\.gz') && \
@@ -462,7 +455,7 @@ install_conda-env(){
 	local name="py3_dev_$(date +%F)"
 	conda env remove -y -n $name || die 'please switch to base environment'
 	conda config --set changeps1 False
-	
+
 	# XML::Parser requires expat
 	# ggpubr requires nlopt
 	{	conda create -y -n $name python=3 && \
@@ -510,7 +503,7 @@ install_r-libs(){
 				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
 				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src')" && \
 				return 0
-			fi		
+			fi
 		} || return 1
 	else
 		local x version
@@ -525,7 +518,7 @@ install_r-libs(){
 				return 0
 			else
 				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && 
+				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" &&
 				return 0
 			fi
 		} || return 1
@@ -567,7 +560,7 @@ install_htop(){
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mkdir -p $version && \
 		cd htop* && \
-		./configure --prefix=../$version && \
+		./configure --prefix=$DIR/$TOOL/$version && \
 		make -j $THREADS && \
 		make install && \
 		make clean && \
@@ -713,7 +706,7 @@ install_skype(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=onlyoffice            # best ms office clone available
+TOOL=onlyoffice            # nice ms office clone
 install_onlyoffice(){
 	local url
 	{	url='http://download.onlyoffice.com/install/desktop/editors/linux/DesktopEditors-x86_64.AppImage' && \
@@ -732,7 +725,7 @@ install_onlyoffice(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Onlyoffice
-		Exec=$DIR/$TOOL/$BIN/onlyoffice
+		Exec=env QT_SCREEN_SCALE_FACTORS=1 QT_SCALE_FACTOR=0.5 $DIR/$TOOL/$BIN/onlyoffice --force-scale=1
 		Type=Application
 		Icon=$DIR/$TOOL/latest/asc-de.png
 		StartupWMClass=DesktopEditors
@@ -741,7 +734,66 @@ install_onlyoffice(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=emacs                 # emacs rulez
+TOOL=wpsoffice             # best ms office clone available - please check version/url update manually at http://linux.wps.com
+install_wpsoffice(){
+	local url
+	{	url='http://wdl1.pcfg.cache.wpscdn.com/wpsdl/wpsoffice/download/linux/9615/wps-office_11.1.0.9615.XA_amd64.deb' && \
+		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb && ar p $TOOL.deb data.tar.xz | tar xJ && rm $TOOL.deb && \
+		version=$(basename $url | sed -E 's/wps-office_([0-9\.]+)\..+/\1/') && \
+		mv opt/kingsoft/wps-office/office6 $version && \
+		mv usr/share/icons/hicolor/512x512/mimetypes $version/icons && \
+		rm -rf opt usr etc && \
+		mkdir -p $version/bin && \
+		ln -sfnr $version/wps $version/bin/wps-write && \
+		ln -sfnr $version/wpp $version/bin/wps-present && \
+		ln -sfnr $version/wpspdf $version/bin/wps-pdf && \
+		ln -sfnr $version/et $version/bin/wps-calc && \
+		mkdir -p ~/.local/share/fonts && \
+		mv usr/share/fonts/wps-office/* ~/.local/share/fonts && \
+		ln -sfnr $version latest && \
+		BIN=latest/bin
+	} || return 1
+	cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-write.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=WPSoffice-Write
+		Exec=$DIR/$TOOL/$BIN/wps-write
+		Type=Application
+		Icon=$DIR/$TOOL/latest/icons/wps-office2019-wpsmain.png
+		StartupWMClass=Wps-write
+	EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-present.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=WPSoffice-Present
+		Exec=$DIR/$TOOL/$BIN/wps-present
+		Type=Application
+		Icon=$DIR/$TOOL/latest/icons/wps-office2019-wppmain.png
+		StartupWMClass=Wps-present
+	EOF
+	cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-calc.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=WPSoffice-Calc
+		Exec=$DIR/$TOOL/$BIN/wps-calc
+		Type=Application
+		Icon=$DIR/$TOOL/latest/icons/wps-office2019-etmain.png
+		StartupWMClass=Wps-calc
+	EOF
+		cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-pdf.desktop || return 1
+		[Desktop Entry]
+		Terminal=false
+		Name=WPSoffice-PDF
+		Exec=$DIR/$TOOL/$BIN/wps-pdf
+		Type=Application
+		Icon=$DIR/$TOOL/latest/icons/wps-office2019-pdfmain.png
+		StartupWMClass=Wps-pdf
+	EOF
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=emacs                 # emacs rulez in non-evil doom mode or use provided config as ~/.emacs
 install_emacs(){
 	local url version tool
 	{	url='http://ftp.gnu.org/gnu/emacs/' && \
@@ -750,7 +802,7 @@ install_emacs(){
 		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz && tar -xzf $TOOL.tar.gz && rm $TOOL.tar.gz && \
 		rm -rf $version && mkdir -p $version && \
 		cd emacs* && \
-		./configure --prefix=../$version --with-x-toolkit=no --with-xpm=ifavailable --with-gif=ifavailable && \
+		./configure --prefix=$DIR/$TOOL/$version --with-x-toolkit=no --with-xpm=ifavailable --with-gif=ifavailable && \
 		make -j $THREADS && \
 		make install && \
 		make clean && \
@@ -758,48 +810,6 @@ install_emacs(){
 		rm -rf emacs* && \
 		ln -sfnr $version latest && \
 		BIN=latest/bin && \
-		return 0
-	} || return 1
-}
-[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
-
-TOOL=emacs-addons         # ralee-mode, neotree, ess
-install_emacs-addons(){
-	{	tool=ralee && \
-		mkdir -p $tool && \
-		cd $tool && \
-		url='http://sgjlab.org/ralee/' && \
-		url='http://sgjlab.org/'$(curl -s 'http://sgjlab.org/ralee/' | grep -Eo 'wp-content\S+ralee-mode-[0-9\.]+.tar.gz' | sort -Vr | head -1) && \
-		version=$(basename $url | sed -E 's/ralee-mode-([0-9\.]+)\..+/\1/') && \
-		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $tool.tar.gz && tar -xzf $tool.tar.gz && rm $tool.tar.gz && \
-		mv ralee*/elisp $version && \
-		rm -rf ralee* && \
-		ln -sfnr $version latest && \
-		cd .. && \
-
-		tool=neotree && \
-		mkdir -p $tool && \
-		cd $tool && \
-		git clone https://github.com/jaypei/emacs-neotree.git && \
-		cd emacs-neotree && \
-		version=$(git tag | grep -oE '[0-9\.]+' | sort -Vr | head -1) && \
-		cd .. && \
-		mkdir -p $version && \
-		mv emacs-neotree/*.el $version && \
-		rm -rf emacs-neotree && \
-		ln -sfnr $version latest && \
-		cd .. && \
-
-		tool=ess && \
-		mkdir -p $tool && \
-		cd $tool && \
-		url=$(curl -s https://ess.r-project.org/index.php?Section=download | grep -oE 'http\S+ess-[0-9\.]+\.zip' | sort -Vr | head -1) && \
-		version=$(basename $url | sed -E 's/ess-([0-9\.]+)\..+/\1/') && \
-		wget -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $tool.zip && unzip -q $tool.zip && rm $tool.zip && \
-		mkdir -p $version && \
-		mv ess*/lisp/*.el $version && \
-		rm -rf ess* && \
-		ln -sfnr $version latest && \
 		return 0
 	} || return 1
 }
