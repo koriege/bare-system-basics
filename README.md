@@ -1,10 +1,12 @@
 # bare-system-basics
 ---
 
-Non-root software installer and updater for non production ready linux environments.
-This setup routine brings a selection of software locally to your linux computer.
+Non-root software installer and updater for non production ready `*NIX` environments.
 
-# License
+
+The `bsb.sh` setup routine brings a selection of software locally to your linux computer. Within the scope of life-science/bioinformatics, a Python3 conda environment, R and Perl libraries can be compiled as well. Optionally, find enclosed my fallback emacs configuration (see also <https://github.com/hlissner/doom-emacs>).
+
+# license
 ---
 
 The whole project is licensed under the GPL v3 (see LICENSE file for details). <br>
