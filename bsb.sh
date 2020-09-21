@@ -31,7 +31,7 @@ usage(){
 		!!! we <3 space-free file-paths !!!
 
 		VERSION
-		0.3.1
+		0.4.0
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -130,7 +130,7 @@ javawrapper() {
 		exec "\$java" "\${jvm_mem_args[@]}" "\${jvm_prop_args[@]}" -jar "$2" "\${pass_args[@]}"
 	EOF
 	chmod 755 "$1" || return 1
-	
+
 	return 0
 }
 
@@ -449,59 +449,71 @@ install_conda(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
-TOOL=conda-env             # setup dev env via conda. perl + packages ,r , datamash, gcc, pigz, htslib
+TOOL=conda-env             # setup dev env via conda. compilers, perl + packages ,r-base , datamash, ghostscript, pigz
 install_conda-env(){
 	[[ -n $CONDA_PREFIX ]] || die 'please activate conda first'
 	local name="py3_dev_$(date +%F)"
 	conda env remove -y -n $name || die 'please switch to base environment'
 	conda config --set changeps1 False
 
-	# XML::Parser requires expat
-	# ggpubr requires nlopt
+	# for py2 env: perl-libs XML::Parser requires expat, Bio::Perl requires perl-dbi perl-db-file
+	# -> in py3 env self compiling perl modules is terrifying
+
+	# r-libs ggpubr requires nlopt
 	{	conda create -y -n $name python=3 && \
 		conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
-			gcc_linux-64 readline make automake xz zlib bzip2 pigz pbzip2 ncurses htslib ghostscript \
-			perl perl-threaded perl-dbi perl-app-cpanminus perl-bioperl perl-bio-eutilities \
-			numpy scipy pysam cython matplotlib \
-			datamash \
-			r-base nlopt && \
+			gcc_linux-64 gxx_linux-64 gfortran_linux-64 \
+			glib pkg-config make automake cmake \
+			bzip2 pigz pbzip2 \
+			curl ghostscript dos2unix datamash \
+			htslib expat nlopt \
+			perl-threaded perl-app-cpanminus perl-dbi perl-db-file perl-xml-parser perl-bioperl perl-bio-eutilities \
+			r-base  && \
 			# rstudio
-			# r-codetools r-devtools r-biocmanager bioconductor-biocinstaller
-			# bioconductor-biocparallel bioconductor-genefilter bioconductor-deseq2 bioconductor-tcgautils bioconductor-tcgabiolinks \
-			# r-dplyr r-ggplot2 r-gplots r-rcolorbrewer r-svglite r-pheatmap r-ggpubr r-tidyverse r-data.table && \
 		conda clean -y -a
-		# rstudio is old and in r channel whereas r-base in actively maintained in conda-forge
-		# for latest R use external rstudio and compile libs manually
-		# when using conda rstudio there will be clashing r channel rstuio/r-base R version and other channel librarys R built versions
-		# -> either re-compile corrupt packages and ignore built version warnings (see here-doc below)
-		# -> or compile libs manually
+		# rstudio is old and in r channel and depends on old r channel r-base whereas r-base in actively maintained in conda-forge
+		# furthermore, when using conda rstudio there will be clashes of r channel r-base version and other channel libraries r built versions
 	} || return 1
-
-	# cat <<-EOF
-	# 	Please note:
-	# 	If you encounter troubles loading R libraries, try to manually re-install corrupt packages
-	# 	conda activate $name
-	# 	rm -rf /ssd/data/programs/conda/$version/envs/$name/lib/R/library/stringi
-	# 	Rscript -e "install.packages('stringi', repos='http://cloud.r-project.org')"
-	# EOF
 
 	FOUND=true
 	return 0
 }
 [[ ${OPT[$TOOL]} ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
+TOOL=python-libs           # conda/non-conda: numpy scipy pysam cython matplotlib
+install_python-libs(){
+	mkdir -p src
+	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
+		{	pip download -d $PWD/src numpy scipy pysam cython matplotlib && \
+			pip install --force-reinstall --find-links $PWD/src numpy scipy pysam cython matplotlib && \
+			return 0
+		} || return 1
+	else
+		local x url
+		read -r -p ':WARNING: current environment may not fulfill all prerequisites and dependencies. please try with an activated conda environment or continue? (y|n): ' x
+		[[ $x == "n" ]] && return 0
+		version=$(python --version | awk '{print $NF}')
+		mkdir -p $version
+		{	pip download -d $PWD/src numpy scipy pysam cython matplotlib && \
+			pip install --force-reinstall --prefix $PWD/$version --find-links $PWD/src numpy scipy pysam cython matplotlib && \
+			return 0
+		} || return 1
+	fi
+}
+[[ ${OPT[$TOOL]} ]] && run install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
+
 TOOL=r-libs                # conda/non-conda: dplyr tidyverse ggpubr ggplot2 gplots RColorBrewer svglite pheatmap data.table BiocParallel genefilter DESeq2 TCGAutils TCGAbiolinks
 install_r-libs(){
 	mkdir -p src
 	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
-		{	Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
-			Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); devtools::install_github(c('andymckenzie/DGCA'), Ncpus=$THREADS, upgrade='never', force=T, clean=T, destdir='$PWD/src')" && \
+		{	Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); devtools::install_github(c('andymckenzie/DGCA'), upgrade='never', force=T, Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
 			if [[ $(conda list -n $name -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src')" && \
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
 				return 0
 			else
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src')" && \
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')" && \
 				return 0
 			fi
 		} || return 1
@@ -511,14 +523,14 @@ install_r-libs(){
 		[[ $x == "n" ]] && return 0
 		version=$(Rscript --version 2>&1 | awk '{print $(NF-1)}')
 		mkdir -p $version
-		{	Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
-			Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); devtools::install_github(c('andymckenzie/DGCA'), Ncpus=$THREADS, upgrade='never', force=T, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+		{	Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('devtools','codetools','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); devtools::install_github(c('andymckenzie/DGCA'), Ncpus=$THREADS, upgrade='never', force=T, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
 			if [[ $(conda list -n $name -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
 				return 0
 			else
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
-				Rscript -e "options(unzip='$(which unzip)'); Sys.setenv(TAR='$(which tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, clean=T, destdir='$PWD/src', lib='$PWD/$version')" &&
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" && \
+				Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','TCGAutils','TCGAbiolinks'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')" &&
 				return 0
 			fi
 		} || return 1
@@ -529,13 +541,24 @@ install_r-libs(){
 TOOL=perl-libs             # conda/non-conda: Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple
 install_perl-libs(){
 	mkdir -p src
+	local x
 	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
-		{	cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
-			cpanm --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+		[[ $($CONDA_PYTHON_EXE --version | awk '{printf "%d",$NF}') -eq 3 ]] && {
+			read -r -p ':WARNING: current conda environment may not fulfill all prerequisites and dependencies. (y|n): ' x
+			[[ $x == "n" ]] && return 0
+		}
+		# in worst case make use of
+		# CFLAGS="-I$CONDA_PREFIX/include"
+		# LDFLAGS="-L$CONDA_PREFIX/lib"
+		# CPATH="$CONDA_PREFIX/include"
+		# LIBRARY_PATH="$CONDA_PREFIX/lib"
+		# LD_LIBRARY_PATH="$CONDA_PREFIX/lib"
+		{	env EXPATINCPATH="$CONDA_PREFIX/include" EXPATLIBPATH="$CONDA_PREFIX/lib" cpanm -l /dev/null --force --scandeps --save-dists $PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
+			env EXPATINCPATH="$CONDA_PREFIX/include" EXPATLIBPATH="$CONDA_PREFIX/lib" cpanm --reinstall --mirror file://$PWD/src Bio::Perl Bio::DB::EUtilities Tree::Simple Try::Tiny List::MoreUtils XML::Simple && \
 			return 0
 		} || return 1
 	else
-		local x url
+		local url
 		read -r -p ':WARNING: current environment may not fulfill all prerequisites and dependencies. please try with an activated conda environment or continue? (y|n): ' x
 		[[ $x == "n" ]] && return 0
 		version=$(perl --version | head -2 | tail -1 | sed -E 's/.+\(v(.+)\).+/\1/')

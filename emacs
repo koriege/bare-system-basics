@@ -107,8 +107,10 @@
 (global-set-key (kbd "C-x <C-right>") 'windmove-right)
 (global-set-key (kbd "C-x <C-up>") 'windmove-up)
 (global-set-key (kbd "C-x <C-down>") 'windmove-down)
-(global-set-key (kbd "C-x q") 'delete-window) ;; kill-buffer-and-window kbd-macro-query
+(global-set-key (kbd "C-x q") 'kill-buffer-and-window) ;; delete-window kill-buffer-and-window kbd-macro-query
 (global-set-key (kbd "C-x /") 'comment-or-uncomment-region)
+(global-set-key (kbd "C-<right>") 'forward-word)
+(global-set-key (kbd "C-<left>") 'backward-word)
 
 ;; some modes override global key bindings, hence this function can be used in mode hooks below
 (defun set-custom-keys ()
@@ -126,8 +128,10 @@
 	(local-set-key (kbd "C-x <C-right>") 'windmove-right)
 	(local-set-key (kbd "C-x <C-up>") 'windmove-up)
 	(local-set-key (kbd "C-x <C-down>") 'windmove-down)
-	(local-set-key (kbd "C-x q") 'delete-window) ;; kill-buffer-and-window kbd-macro-query
+	(local-set-key (kbd "C-x q") 'kill-buffer-and-window) ;; delete-window kill-buffer-and-window kbd-macro-query
 	(local-set-key (kbd "C-x /") 'comment-or-uncomment-region)
+	(local-set-key (kbd "C-<right>") 'forward-word)
+	(local-set-key (kbd "C-<left>") 'backward-word)
 )
 
 ;; split window and toggle
@@ -307,6 +311,7 @@
 	)
 ))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; addon modes ;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -317,7 +322,7 @@
 (doom-modeline-mode 1)
 (setq doom-modeline-checker-simple-format nil)
 (defun modline-hide-modes ()
-	(mapcar 
+	(mapcar
 		(lambda (mode) (
 			condition-case nil
 				(unless (or (string= mode "tab-mode") (string= mode "space-mode"))
@@ -331,6 +336,14 @@
 (add-hook 'after-change-major-mode-hook 'modline-hide-modes)
 (add-hook 'find-file-hook 'modline-hide-modes)
 (add-hook 'first-change-hook 'modline-hide-modes)
+
+
+;;;;;; RNA alignment editing ;;;;;;
+;; http://sgjlab.org/wp-content/uploads/2014/11/ralee-mode-0.8.tar.gz
+(add-to-list 'load-path "/misc/paras/data/programs/ralee-mode/latest/elisp")
+(add-to-list 'exec-path "/misc/paras/data/programs/ralee-mode/latest/elisp")
+(require 'ralee-mode)
+(add-to-list 'auto-mode-alist '("\\.stk$" . ralee-mode))
 
 
 ;;;;;; project tree browser ;;;;;;
@@ -378,6 +391,8 @@
 	;; disble completion by return
 	(define-key company-active-map (kbd "RET") nil)
 	(setq company-idle-delay 0)
+	(setq company-minimum-prefix-length 2)
+	;;(setq company-show-numbers t)
 	;; use dabbrev (plain text) as default
 	(setq company-backends '(company-dabbrev))
 	(add-to-list 'company-backends '(company-files))
@@ -392,9 +407,12 @@
 (defun global-flycheck-mode-setup ()
 	(setq flycheck-check-syntax-automatically '(mode-enabled new-line idle-change save))
 	(setq flycheck-idle-change-delay 0)
+	(setq flycheck-highlighting-mode 'lines)
 	;; change colors, but line always defaults to foreground and forground might be overriden by emacs theme
 	;; (set-face-attribute 'flycheck-error nil :foreground nil :background "color-88" :underline '(:color "color-88" :style wave))
 	(set-face-attribute 'flycheck-error nil :foreground nil :background "color-88" :underline nil)
+	(set-face-attribute 'flycheck-warning nil :foreground nil :background "yellow" :underline nil)
+	(set-face-attribute 'flycheck-info nil :foreground nil :background "color-22" :underline nil)
 )
 (add-hook 'global-flycheck-mode-hook 'global-flycheck-mode-setup)
 (add-hook 'after-init-hook 'global-flycheck-mode)
@@ -403,7 +421,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; builtin modes ;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 
 ;;;;;; customize text-mode ;;;;;;
 ;; make text mode the global default
