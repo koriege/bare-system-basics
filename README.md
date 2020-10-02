@@ -43,7 +43,7 @@ source <installpath>/SOURCE.me
 | adb                   | minimal installation of android debugging bridge and sideload |
 | conda                 | root less package control software |
 | conda-env             | setup dev env via conda. perl + packages ,r , datamash, gcc, pigz, htslib |
-| r-libs                | conda/non-conda: `dplyr tidyverse ggpubr ggplot2 gplots RColorBrewer svglite pheatmap data.table BiocParallel genefilter DESeq2`TCGAutils TCGAbiolinks |
+| r-libs                | conda/non-conda: `dplyr tidyverse ggpubr ggplot2 gplots RColorBrewer svglite pheatmap data.table BiocParallel genefilter DESeq2 DEXSeq clusterProfiler TCGAutils TCGAbiolinks WGCNA DGCA` |
 | perl-libs             | conda/non-conda: `Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple` |
 | htop                  | graphical task manager |
 | jabref                | references/citations manager |
