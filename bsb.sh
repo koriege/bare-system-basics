@@ -64,7 +64,7 @@ usage(){
 		!!! we <3 space-free file-paths !!!
 
 		VERSION
-		0.4.1
+		0.4.2
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -293,7 +293,7 @@ install_firefox(){
 	url="$url$version/linux-x86_64/en-US/firefox-$version.tar.bz2"
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2
 	rm -rf $version
-	tar -xjf $TOOL.tar.bz2
+	tar -xjf $TOOL.tar.bz2 && rm -f $TOOL.tar.bz2
 	mv firefox* $version
 	ln -sfnr $version latest
 	BIN=latest
@@ -323,7 +323,7 @@ install_thunderbird(){
 	url="$url$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2"
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2
 	rm -rf $version
-	tar -xjf $TOOL.tar.bz2
+	tar -xjf $TOOL.tar.bz2 && rm -f $TOOL.tar.bz2
 	mv thunderbird* $version
 	ln -sfnr $version latest
 	BIN=latest
@@ -350,8 +350,8 @@ install_keeweb(){
 	local url version
 	url='https://github.com/'$(curl -s https://github.com/keeweb/keeweb/releases | grep -oE 'keeweb/\S+KeeWeb-[0-9\.]+\.linux.x64.zip' | sort -Vr | head -1)
 	version=$(basename $url | sed -E 's/KeeWeb-([0-9\.]+)\..+/\1/')
-	rm -rf $version && mkdir $version
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
+	rm -rf $version && mkdir $version
 	unzip -q $TOOL.zip -d $version
 	ln -sfnr $version latest
 	BIN=latest
@@ -381,7 +381,7 @@ install_java(){
 	version=$(basename $url | sed -E 's/jdk-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mv jdk* $version
 	ln -sfnr $version latest
 	BIN=latest/bin
@@ -458,7 +458,7 @@ install_sublime(){
 	version=$(basename $url | sed -E 's/.+build_([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2
 	rm -rf $version
-	tar -xjf $TOOL.tar.bz2
+	tar -xjf $TOOL.tar.bz2 && rm -f $TOOL.tar.bz2
 	mv sublime* $version
 	mkdir -p $version/bin
 	ln -sfnr $version/sublime_text $version/bin/subl
@@ -490,7 +490,7 @@ install_sublime-merge(){
 	version=$(basename $url | sed -E 's/.+build_([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz
 	rm -rf $version
-	tar -xf $TOOL.tar.xz
+	tar -xf $TOOL.tar.xz && rm -f $TOOL.tar.xz
 	mv sublime* $version
 	mkdir -p $version/bin
 	ln -sfnr $version/sublime_merge $version/bin/sublmerge
@@ -790,7 +790,7 @@ install_meld(){
 	version=$(basename $url | sed -E 's/meld-([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz
 	rm -rf $version
-	tar -xf $TOOL.tar.xz
+	tar -xf $TOOL.tar.xz && rm -f $TOOL.tar.xz
 	mv meld* $version
 	ln -sfnr $version latest
 	BIN=latest/bin
@@ -979,6 +979,24 @@ install_emacs(){
 	rm -rf emacs*
 	ln -sfnr $version latest
 	BIN=latest/bin
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=shellcheck            # a shell script static analysis tool
+install_shellcheck(){
+	_cleanup::install_shellcheck(){
+		rm -f $TOOL.tar.xz
+	}
+
+	local url version
+	url='https://github.com/'$(curl -s https://github.com/koalaman/shellcheck/releases | grep -oE 'koalaman/\S+shellcheck-v[0-9\.]+\.linux.x86_64.tar.xz' | sort -Vr | head -1)
+	version=$(basename $url | sed -E 's/shellcheck-v([0-9\.]+)\..+/\1/')
+	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz
+	tar -xf $TOOL.tar.xz && rm -f $TOOL.tar.xz
+	mv shellcheck* $version
+	ln -sfnr $version latest
+	BIN=latest
 	return 0
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
