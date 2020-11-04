@@ -192,7 +192,7 @@ install_cronjob(){
 	FOUND=true
 	return 0
 }
-[[ ${OPT[$TOOL]} ]] && install_$TOOL
+[[ ${OPT[$TOOL]} ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
 
 TOOL=google-chrome         # google chrome webbrowser
 install_google-chrome(){
@@ -348,7 +348,7 @@ install_keeweb(){
 	}
 
 	local url version
-	url='https://github.com/'$(curl -s https://github.com/keeweb/keeweb/releases | grep -oE 'keeweb/\S+KeeWeb-[0-9\.]+\.linux.x64.zip' | sort -Vr | head -1)
+	url='https://github.com/'$(curl -s https://github.com/keeweb/keeweb/releases | grep -oE 'keeweb/\S+KeeWeb-[0-9\.]+\.linux\.x64\.zip' | sort -Vr | head -1)
 	version=$(basename $url | sed -E 's/KeeWeb-([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
 	rm -rf $version && mkdir $version
@@ -486,7 +486,7 @@ install_sublime-merge(){
 	}
 
 	local url version
-	url=$(curl -s https://www.sublimemerge.com/download | grep -oE 'http\S+x64.tar.xz' | sort -Vr | head -1)
+	url=$(curl -s https://www.sublimemerge.com/download | grep -oE 'http\S+x64\.tar\.xz' | sort -Vr | head -1)
 	version=$(basename $url | sed -E 's/.+build_([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz
 	rm -rf $version
@@ -562,6 +562,8 @@ install_conda-env(){
 	# r-libs ggpubr requires nlopt
 	# do not install r-studio which is old and in r channel only plus depends on old r channel r-base whereas r-base in conda-forge is actively maintained
 	# thus, when using conda rstudio there will be clashes of r channel r-base version and other channel libraries r built versions
+	# -> freeze r-base version known to have all requested modules available
+	# perl from conda-forge is compiled with threads, perl from bioconda not (recently removed) - thus there is an old perl-threaded version
 	conda create -y -n $name python=3
 	conda install -n $name -y --override-channels -c iuc -c conda-forge -c bioconda -c main -c defaults -c r -c anaconda \
 		gcc_linux-64 gxx_linux-64 gfortran_linux-64 \
@@ -569,8 +571,9 @@ install_conda-env(){
 		bzip2 pigz pbzip2 \
 		curl ghostscript dos2unix datamash \
 		htslib expat nlopt \
-		perl-threaded perl-app-cpanminus perl-list-moreutils perl-try-tiny perl-dbi perl-db-file perl-xml-parser perl-bioperl perl-bio-eutilities \
-		r-base
+		perl perl-app-cpanminus perl-list-moreutils perl-try-tiny perl-dbi perl-db-file perl-xml-parser perl-bioperl perl-bio-eutilities \
+		r-base=4.0.2 \
+		java-jdk
 	conda clean -y -a
 	source $CONDA_PREFIX/bin/activate $name
 	cpanm Switch
@@ -744,7 +747,7 @@ install_tilix(){
 	}
 
 	local url version
-	url='https://github.com/'$(curl -s https://github.com/gnunn1/tilix/releases/ | grep -oE 'gnunn1\S+tilix.zip' | sort -Vr | head -1)
+	url='https://github.com/'$(curl -s https://github.com/gnunn1/tilix/releases/ | grep -oE 'gnunn1\S+tilix\.zip' | sort -Vr | head -1)
 	version=$(basename $(dirname $url))
 	rm -rf $version && mkdir -p $version
 	cd $version
@@ -806,7 +809,7 @@ install_spotify(){
 
 	local url version
 	url='https://repository-origin.spotify.com/pool/non-free/s/spotify-client/'
-	url="$url"$(curl -s "$url" | grep -oE 'spotify-client_[^"]+_amd64.deb' | sort -Vr | head -1)
+	url="$url"$(curl -s "$url" | grep -oE 'spotify-client_[^"]+_amd64\.deb' | sort -Vr | head -1)
 	version=$(basename "$url" | sed -E 's/spotify-client_([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N "$url" -O $TOOL.deb
 	rm -rf $version
@@ -983,6 +986,18 @@ install_emacs(){
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
 
+TOOL=doom                  # emacs doom mode
+install_doom(){
+	local url version tool
+	git clone --depth 1 https://github.com/hlissner/doom-emacs $HOME/.emacs.d
+	$HOME/.emacs.d/bin/doom install
+	$HOME/.emacs.d/bin/doom sync
+
+	FOUND=true
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && install_$TOOL # do not call run install_ to avoid mkdir - thus set FOUND manually to true
+
 TOOL=shellcheck            # a shell script static analysis tool
 install_shellcheck(){
 	_cleanup::install_shellcheck(){
@@ -990,13 +1005,45 @@ install_shellcheck(){
 	}
 
 	local url version
-	url='https://github.com/'$(curl -s https://github.com/koalaman/shellcheck/releases | grep -oE 'koalaman/\S+shellcheck-v[0-9\.]+\.linux.x86_64.tar.xz' | sort -Vr | head -1)
+	url='https://github.com/'$(curl -s https://github.com/koalaman/shellcheck/releases | grep -oE 'koalaman/\S+shellcheck-v[0-9\.]+\.linux\.x86_64\.tar\.xz' | sort -Vr | head -1)
 	version=$(basename $url | sed -E 's/shellcheck-v([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.xz
 	tar -xf $TOOL.tar.xz && rm -f $TOOL.tar.xz
 	mv shellcheck* $version
 	ln -sfnr $version latest
 	BIN=latest
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=freetube              # full blown youtube client without ads and tracking
+install_freetube(){
+	_cleanup::install_freetube(){
+		rm -f $TOOL.AppImage
+	}
+
+	local url version
+	url='https://github.com/'$(curl -s https://github.com/FreeTubeApp/FreeTube/releases | grep -oE 'FreeTubeApp/\S+FreeTube-[0-9\.]+\.AppImage' | sort -Vr | head -1)
+	version=$(basename $url | sed -E 's/FreeTube-([0-9\.]+)\..+/\1/')
+	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.AppImage
+	chmod 755 $TOOL.AppImage
+	rm -rf $version
+	./$TOOL.AppImage --appimage-extract
+	mv squashfs-root $version
+	mkdir -p $version/bin
+	ln -sfnr $version/AppRun $version/bin/freetube
+	ln -sfnr $version latest
+	BIN=latest/bin
+
+	cat <<- EOF > $HOME/.local/share/applications/my-freetube.desktop
+		[Desktop Entry]
+		Terminal=false
+		Name=FreeTube
+		Exec=$DIR/$TOOL/latest/bin/freetube
+		Type=Application
+		Icon=$DIR/$TOOL/latest/usr/share/icons/hicolor/256x256/apps/freetube.png
+		StartupWMClass=FreeTube
+	EOF
 	return 0
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
