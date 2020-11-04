@@ -20,6 +20,7 @@
 	git-commit
 	magit
 	poetry
+	multiple-cursors
 ))
 (unless (cl-every 'package-installed-p package-selected-packages)
 	(let
@@ -381,7 +382,7 @@
 	(global-set-key (kbd "M-/") 'xref-find-apropos)
 ;;)
 ;; deprecated: (add-hook 'dumb-jump-mode-hook 'dumb-jump-mode-setup)
-(add-hook 'xref-backend-functions 'dumb-jump-xref-activate)
+;; (add-hook 'xref-backend-functions 'dumb-jump-xref-activate)
 
 
 ;;;;;; popup word completion ;;;;;;
@@ -416,6 +417,16 @@
 )
 (add-hook 'global-flycheck-mode-hook 'global-flycheck-mode-setup)
 (add-hook 'after-init-hook 'global-flycheck-mode)
+
+
+;;;;; multiple cursor
+(require 'multiple-cursors)
+;;(defun multiple-cursors-mode-setup ()
+	(global-set-key (kbd "C-l") 'mc/edit-lines)
+	(global-set-key (kbd "C-p") 'mc/mark-pop)
+;;)
+;;(add-hook 'multiple-cursors-mode-hook 'multiple-cursors-mode-setup)
+;;(add-hook 'after-init-hook 'multiple-cursors-mode)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
