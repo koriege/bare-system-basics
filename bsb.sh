@@ -260,7 +260,7 @@ install_opera(){
 	local url version
 	url='https://get.geo.opera.com/pub/opera/desktop/'
 	version=$(curl -s $url | grep -oE 'href="[0-9]+[0-9\.]+' | cut -d '"' -f 2 | sort -Vr | head -1)
-	url="$url$version/linux/opera-stable_${version}_amd64"
+	url="$url$version/linux/opera-stable_${version}_amd64.deb"
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
 	rm -rf $version
 	ar p $TOOL.deb data.tar.xz | tar xJ
@@ -376,8 +376,7 @@ install_java(){
 	}
 
 	local url version
-	# under forced login: url="https://download.oracle.com/otn-pub/java/jdk/13.0.2+8/d4173c853231432d94f001e99d882ca7/jdk-13.0.2_linux-x64_bin.tar.gz"
-	url="https://download.oracle.com/otn-pub/java/jdk/14.0.2+12/205943a0976c4ed48cb16f1043c5c647/jdk-14.0.2_linux-x64_bin.tar.gz"
+	url="https://download.oracle.com/otn-pub/java/jdk/15.0.1%2B9/51f4f36ad4ef43e39d0dfdbaf6549e32/jdk-15.0.1_linux-x64_bin.tar.gz"
 	version=$(basename $url | sed -E 's/jdk-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz
 	rm -rf $version
