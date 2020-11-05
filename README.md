@@ -1,5 +1,4 @@
 # bare-system-basics
----
 
 Non-root software installer and updater for non production ready `*NIX` environments.
 
@@ -7,7 +6,6 @@ Non-root software installer and updater for non production ready `*NIX` environm
 The `bsb.sh` setup routine brings a selection of software locally to your linux computer. Within the scope of life-science/bioinformatics, a Python3 conda environment, R and Perl libraries can be compiled as well. Optionally, find enclosed my fallback emacs configuration (see also <https://github.com/hlissner/doom-emacs>).
 
 # license
----
 
 The whole project is licensed under the GPL v3 (see LICENSE file for details). <br>
 **except** the the third-party tools set-upped during installation. Please refer to the corresponding licenses
@@ -15,7 +13,6 @@ The whole project is licensed under the GPL v3 (see LICENSE file for details). <
 Copyleft (C) 2020, Konstantin Riege
 
 # usage
----
 
 ```
 bsb.sh -h
@@ -24,7 +21,6 @@ source <installpath>/SOURCE.me
 ```
 
 # supported tools
----
 
 | tool | description |
 | :--- | :---        |
@@ -57,7 +53,6 @@ source <installpath>/SOURCE.me
 | emacs                 | emacs rulez in non-evil doom mode or use provided config as ~/.emacs |
 
 # info and trouble shooting
----
 
 ## how to use conda tools and non-conda libraries
 
