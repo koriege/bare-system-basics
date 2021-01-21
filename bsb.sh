@@ -39,7 +39,7 @@ trap '
 ' EXIT
 
 # must not be splitted into multiple lines to keep valid LINENO
-trap 'e=$?;	if [[ $e -ne 141 ]]; then if [[ "${BASH_SOURCE[0]}" == "$0" && "${FUNCNAME[0]}" == "main" ]]; then printerr -x $e -e "$ERROR" -l $LINENO -s "$0"; exit $e; else printerr -x $e -e "$ERROR" -l $LINENO -f "${FUNCNAME[0]}"; return $e; fi; fi' ERR
+trap 'e=$?;	if [[ $e -ne 141 ]]; then if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then printerr -x $e -e "$ERROR" -l $LINENO -s "$0"; exit $e; else printerr -x $e -e "$ERROR" -l $LINENO -f "${FUNCNAME[0]}"; return $e; fi; fi' ERR
 
 trap 'declare -F _cleanup::${FUNCNAME[0]} &> /dev/null && _cleanup::${FUNCNAME[0]}' RETURN
 
@@ -64,7 +64,7 @@ usage(){
 		!!! we <3 space-free file-paths !!!
 
 		VERSION
-		0.4.3
+		0.4.4
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -139,7 +139,7 @@ run(){
 	[[ $BIN ]] && {
 		sed -i "/PATH=/d" $SOURCE
 		sed -i "\@$DIR/$TOOL@d" $SOURCE #\@ necessary for path matches - s@/dir/path/@replacement@ is okay , @/dir/path/@d not
-		echo "VAR=\$VAR:$DIR/$TOOL/$BIN" >> $SOURCE
+		grep -q -m 1 -F "VAR=" $SOURCE && echo "VAR=\$VAR:$DIR/$TOOL/$BIN" >> $SOURCE || echo "VAR=$DIR/$TOOL/$BIN" >> $SOURCE
 		echo 'PATH=$VAR:$PATH' >> $SOURCE
 	}
 	return 0
@@ -203,7 +203,7 @@ install_google-chrome(){
 	local url version
 	url='https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb'
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
-	ar p $TOOL.deb data.tar.xz | tar xJ
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
 	version=$(opt/google/chrome/google-chrome --version | awk '{print $NF}')
 	rm -rf $version && mv opt $version && rm -rf usr && rm -rf etc
 	ln -sfnr $version latest
@@ -233,7 +233,7 @@ install_vivaldi(){
 	version=$(basename $url | sed -E 's/vivaldi-stable_([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
 	rm -rf $version
-	ar p $TOOL.deb data.tar.xz | tar xJ
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
 	mv opt $version && rm -rf usr && rm -rf etc
 	ln -sfnr $version latest
 	BIN=latest/vivaldi
@@ -263,7 +263,7 @@ install_opera(){
 	url="$url$version/linux/opera-stable_${version}_amd64.deb"
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
 	rm -rf $version
-	ar p $TOOL.deb data.tar.xz | tar xJ
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
 	mv usr $version
 	ln -sfnr $version latest
 	BIN=latest/bin
@@ -301,7 +301,7 @@ install_firefox(){
 	cat <<- EOF > $HOME/.local/share/applications/my-firefox.desktop
 		[Desktop Entry]
 		Name=Firefox
-		Exec=$DIR/$TOOL/$BIN/firefox %u
+		Exec=$DIR/$TOOL/$BIN/firefox %U
 		Icon=$DIR/$TOOL/$BIN/browser/chrome/icons/default/default128.png
 		Terminal=false
 		Type=Application
@@ -332,7 +332,7 @@ install_thunderbird(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Thunderbird
-		Exec=$DIR/$TOOL/$BIN/thunderbird
+		Exec=$DIR/$TOOL/$BIN/thunderbird %U
 		Type=Application
 		Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
 		StartupWMClass=Thunderbird
@@ -352,7 +352,7 @@ install_keeweb(){
 	version=$(basename $url | sed -E 's/KeeWeb-([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
 	rm -rf $version && mkdir $version
-	unzip -q $TOOL.zip -d $version
+	unzip -q $TOOL.zip -d $version && rm -f $TOOL.zip
 	ln -sfnr $version latest
 	BIN=latest
 
@@ -399,7 +399,7 @@ install_pdf-editor4(){
 	version=$(basename $url | sed -E 's/master-pdf-editor-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mv master-pdf-editor* $version
 	ln -sfnr $version latest
 	BIN=latest
@@ -408,7 +408,7 @@ install_pdf-editor4(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Masterpdfeditor4
-		Exec=$DIR/$TOOL/$BIN/masterpdfeditor4
+		Exec=$DIR/$TOOL/$BIN/masterpdfeditor4 %U
 		Type=Application
 		Icon=$DIR/$TOOL/$BIN/masterpdfeditor4.png
 		StartupWMClass=Masterpdfeditor4
@@ -428,7 +428,7 @@ install_pdf-editor5(){
 	version=$(basename $url | sed -E 's/master-pdf-editor-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mv master-pdf-editor* $version
 	ln -sfnr $version latest
 	BIN=latest
@@ -437,7 +437,7 @@ install_pdf-editor5(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Masterpdfeditor5
-		Exec=$DIR/$TOOL/$BIN/masterpdfeditor5
+		Exec=$DIR/$TOOL/$BIN/masterpdfeditor5 %U
 		Type=Application
 		Icon=$DIR/$TOOL/$BIN/masterpdfeditor5.png
 		StartupWMClass=Masterpdfeditor5
@@ -469,7 +469,7 @@ install_sublime(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Sublime
-		Exec=$DIR/$TOOL/$BIN/sublime_text
+		Exec=$DIR/$TOOL/$BIN/sublime_text %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/Icon/256x256/sublime-text.png
 		StartupWMClass=Sublime_text
@@ -519,7 +519,7 @@ install_adb(){
 	local url version
 	url='https://dl.google.com/android/repository/platform-tools-latest-linux.zip'
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
-	unzip -q $TOOL.zip
+	unzip -q $TOOL.zip && rm -f $TOOL.zip
 	version=$(platform-tools*/adb version | grep -F version | cut -d ' ' -f 5)
 	rm -rf $version
 	mv platform-tools* $version
@@ -550,9 +550,12 @@ install_conda(){
 
 TOOL=conda-env             # setup dev env via conda. compilers, perl + packages ,r-base , curl, datamash, ghostscript, pigz, htslib
 install_conda-env(){
-	[[ -n $CONDA_PREFIX ]] || die 'please activate conda first'
+	ERROR='please activate conda first'
+	[[ -n $CONDA_PREFIX ]] || false
 	local name="py3_dev_$(date +%F)"
-	conda env remove -y -n $name || die 'please switch to base environment'
+	ERROR='please switch to base environment'
+	conda env remove -y -n $name || false
+	unset ERROR
 	conda config --set changeps1 False
 
 	# for py2 env: perl-libs XML::Parser requires expat, Bio::Perl requires perl-dbi perl-db-file
@@ -609,12 +612,12 @@ install_r-libs(){
 	if [[ $CONDA_PREFIX && $(conda env list | awk '$2=="*"{print $1}') != "base" ]]; then
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('devtools','codetools'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
 		if [[ $(conda list -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
-			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','survminer','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
 		else
 			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
-			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','survminer','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
 		fi
-		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
+		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('reshape2','WGCNA','dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('knapsack'), repos='http://R-Forge.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src')"
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); devtools::install_github(c('andymckenzie/DGCA'), upgrade='never', force=T, clean=T, destdir='$PWD/src')"
 	else
@@ -625,10 +628,10 @@ install_r-libs(){
 		mkdir -p $version
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('devtools','codetools'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
 		if [[ $(conda list -f r-base | tail -1 | awk '$2<3.5{print "legacy"}') ]]; then
-			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); source('https://bioconductor.org/biocLite.R'); BiocInstaller::biocLite(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','survminer','impute','preprocessCore','GO.db','AnnotationDbi'), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
 		else
 			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages('BiocManager', repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
-			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','impute','preprocessCore','GO.db','AnnotationDbi')), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
+			Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); BiocManager::install(c('BiocParallel','genefilter','DESeq2','DEXSeq','clusterProfiler','TCGAutils','TCGAbiolinks','survminer','impute','preprocessCore','GO.db','AnnotationDbi')), ask=F, Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
 		fi
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('dplyr','tidyverse','ggpubr','ggplot2','gplots','RColorBrewer','svglite','pheatmap','data.table'), repos='http://cloud.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
 		Rscript -e "options(unzip='$(command -v unzip)'); Sys.setenv(TAR='$(command -v tar)'); install.packages(c('knapsack'), repos='http://R-Forge.r-project.org', Ncpus=$THREADS, clean=T, destdir='$PWD/src', lib='$PWD/$version')"
@@ -681,7 +684,7 @@ install_htop(){
 	url="$url$version/htop-$version.tar.gz"
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mkdir -p $version
 	cd htop*
 	./configure --prefix=$DIR/$TOOL/$version
@@ -707,7 +710,7 @@ install_jabref(){
 	version=$(basename $url | sed -E 's/JabRef-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mv JabRef $version
 	ln -sfnr $version latest
 	BIN=latest/bin
@@ -726,7 +729,7 @@ install_igv(){
 	version=$(basename $url | sed -E 's/IGV_([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
 	rm -rf $version
-	unzip -q $TOOL.zip
+	unzip -q $TOOL.zip && rm -f $TOOL.zip
 	mv IGV* $version
 	mem=$(grep -F -i memavailable /proc/meminfo | awk '{printf("%d",$2*0.8/1024/1024)}')
 	sed -i -r "s/-Xmx\S+/-Xmx${mem}g/" $version/igv.sh
@@ -751,7 +754,7 @@ install_tilix(){
 	rm -rf $version && mkdir -p $version
 	cd $version
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.zip
-	unzip -q $TOOL.zip
+	unzip -q $TOOL.zip && rm -f $TOOL.zip
 	mv usr/* . && rm -rf usr
 	glib-compile-schemas share/glib-*/schemas/
 	touch bin/tilix.sh
@@ -812,7 +815,7 @@ install_spotify(){
 	version=$(basename "$url" | sed -E 's/spotify-client_([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N "$url" -O $TOOL.deb
 	rm -rf $version
-	ar p $TOOL.deb data.tar.gz | tar xz
+	ar p $TOOL.deb data.tar.gz | tar xz && rm -f $TOOL.deb
 	mv usr/share/spotify $version && rm -rf usr && rm -rf etc
 	mkdir -p $version/bin
 	ln -sfnr $version/spotify $version/bin/
@@ -841,7 +844,7 @@ install_skype(){
 	local url
 	url='https://go.skype.com/skypeforlinux-64.deb'
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
-	ar p $TOOL.deb data.tar.xz | tar xJ
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
 	rm -rf opt latest
 	mv usr latest
 	ln -sfnr latest/bin/skypeforlinux latest/bin/skype
@@ -883,7 +886,7 @@ install_onlyoffice(){
 		[Desktop Entry]
 		Terminal=false
 		Name=Onlyoffice
-		Exec=env QT_SCREEN_SCALE_FACTORS=1 QT_SCALE_FACTOR=0.5 $DIR/$TOOL/$BIN/onlyoffice --force-scale=1
+		Exec=env QT_SCREEN_SCALE_FACTORS=1 QT_SCALE_FACTOR=0.5 $DIR/$TOOL/$BIN/onlyoffice --force-scale=1 %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/asc-de.png
 		StartupWMClass=DesktopEditors
@@ -895,8 +898,7 @@ install_onlyoffice(){
 TOOL=wpsoffice             # best ms office clone available - please check version/url update manually at http://linux.wps.com
 install_wpsoffice(){
 	_cleanup::install_wpsoffice(){
-		echo cleanup
-		#rm -f $TOOL.deb
+		rm -f $TOOL.deb
 	}
 
 	local url
@@ -904,7 +906,7 @@ install_wpsoffice(){
 	version=$(basename $url | sed -E 's/wps-office_([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
 	rm -rf $version
-	ar p $TOOL.deb data.tar.xz | tar xJ
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
 	mv opt/kingsoft/wps-office/office6 $version
 	mv usr/share/icons/hicolor/512x512/mimetypes $version/icons
 	mkdir -p $version/bin
@@ -922,7 +924,7 @@ install_wpsoffice(){
 		[Desktop Entry]
 		Terminal=false
 		Name=WPSoffice-Write
-		Exec=$DIR/$TOOL/$BIN/wps-write
+		Exec=$DIR/$TOOL/$BIN/wps-write %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/icons/wps-office2019-wpsmain.png
 		StartupWMClass=Wps-write
@@ -931,7 +933,7 @@ install_wpsoffice(){
 		[Desktop Entry]
 		Terminal=false
 		Name=WPSoffice-Present
-		Exec=$DIR/$TOOL/$BIN/wps-present
+		Exec=$DIR/$TOOL/$BIN/wps-present %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/icons/wps-office2019-wppmain.png
 		StartupWMClass=Wps-present
@@ -940,16 +942,16 @@ install_wpsoffice(){
 		[Desktop Entry]
 		Terminal=false
 		Name=WPSoffice-Calc
-		Exec=$DIR/$TOOL/$BIN/wps-calc
+		Exec=$DIR/$TOOL/$BIN/wps-calc %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/icons/wps-office2019-etmain.png
 		StartupWMClass=Wps-calc
 	EOF
-		cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-pdf.desktop
+	cat <<- EOF > $HOME/.local/share/applications/my-wpsoffice-pdf.desktop
 		[Desktop Entry]
 		Terminal=false
 		Name=WPSoffice-PDF
-		Exec=$DIR/$TOOL/$BIN/wps-pdf
+		Exec=$DIR/$TOOL/$BIN/wps-pdf %U
 		Type=Application
 		Icon=$DIR/$TOOL/latest/icons/wps-office2019-pdfmain.png
 		StartupWMClass=Wps-pdf
@@ -970,7 +972,7 @@ install_emacs(){
 	version=$(basename $url | sed -E 's/emacs-([0-9\.]+)\..+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
 	rm -rf $version
-	tar -xzf $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
 	mkdir -p $version
 	cd emacs*
 	./configure --prefix=$DIR/$TOOL/$version --with-x-toolkit=no --with-xpm=ifavailable --with-gif=ifavailable
@@ -981,6 +983,16 @@ install_emacs(){
 	rm -rf emacs*
 	ln -sfnr $version latest
 	BIN=latest/bin
+
+	cat <<- EOF > $HOME/.local/share/applications/my-emacs.desktop
+		[Desktop Entry]
+		Terminal=false
+		Name=Emacs
+		Exec=$DIR/$TOOL/$BIN/emacs %U
+		Type=Application
+		Icon=$DIR/$TOOL/latest/share/icons/hicolor/128x128/apps/emacs.png
+		StartupWMClass=Emacs
+	EOF
 	return 0
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
@@ -1027,7 +1039,7 @@ install_freetube(){
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.AppImage
 	chmod 755 $TOOL.AppImage
 	rm -rf $version
-	./$TOOL.AppImage --appimage-extract
+	./$TOOL.AppImage --appimage-extract && rm -f $TOOL.AppImage
 	mv squashfs-root $version
 	mkdir -p $version/bin
 	ln -sfnr $version/AppRun $version/bin/freetube
