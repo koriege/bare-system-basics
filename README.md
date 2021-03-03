@@ -12,6 +12,23 @@ The whole project is licensed under the GPL v3 (see LICENSE file for details). <
 
 Copyleft (C) 2020, Konstantin Riege
 
+# download
+
+Either fetch the latest release archive or utilize `git` as shown below
+<br>
+This will download you a copy which includes the latest developments
+
+```bash
+git clone https://github.com/Hoffmann-Lab/bare-system-basics
+```
+
+To check out the latest release (irregularly compiled) do
+
+```bash
+cd bare-system-basics
+git checkout $(git describe --tags)
+```
+
 # usage
 
 ```
@@ -39,6 +56,7 @@ source <installpath>/SOURCE.me
 | adb                   | minimal installation of android debugging bridge and sideload |
 | conda                 | root less package control software |
 | conda-env             | setup dev env via conda. perl + packages ,r , datamash, gcc, pigz, htslib |
+| perl-libs             | conda/non-conda: `numpy scipy pysam cython matplotlib` |
 | r-libs                | conda/non-conda: `dplyr tidyverse ggpubr ggplot2 gplots RColorBrewer svglite pheatmap data.table BiocParallel genefilter DESeq2 DEXSeq clusterProfiler TCGAutils TCGAbiolinks WGCNA DGCA` |
 | perl-libs             | conda/non-conda: `Try::Tiny List::MoreUtils DB_File Bio::Perl Bio::DB::EUtilities Tree::Simple XML::Simple` |
 | htop                  | graphical task manager |
@@ -51,15 +69,20 @@ source <installpath>/SOURCE.me
 | onlyoffice            | nice ms office clone |
 | wpsoffice             | best ms office clone available - please check version/url update manually at http://linux.wps.com |
 | emacs                 | emacs rulez in non-evil doom mode or use provided config as ~/.emacs |
+| doom                  | emacs doom mode |
+| shellcheck            | a shell script static analysis tool |
+| mdless                | a ruby based terminal markdown viewer |
+| freetube              | full blown youtube client without ads and tracking |
 
 # info and trouble shooting
 
 ## how to use conda tools and non-conda libraries
 
 - to load conda itself, execute `source <installpath>/conda/latest/bin/activate`
-- to load conda tools execute `conda env list', and 'conda activate [env]`
+- to list and load a conda environment execute `conda info -e` and `conda activate [env]`
 - to load non-conda installed perl packages execute `export PERL5LIB=<installpath>/perl-libs/<version>/lib/perl5`
 - to load non-conda installed r packages execute `export R_LIBS=<installpath>/r-libs/<version>`
+- to load non-conda installed python packages execute `export PYTHONPATH=<installpath>/python-libs/<version>`
 
 ## how to define a tool as default application
 - adapt `~/.config/mimeapps.list`
@@ -69,5 +92,5 @@ source <installpath>/SOURCE.me
 - adjust QT settings in `~/.local/share/applications/my-onlyoffice.desktop`
 
 ## how to group multiple windows in gnome application dock
-- define StartupWMClass in `.desktop` file
-- assign value by executing `xprop WM_CLASS` and click on window
+- define or update StartupWMClass in `.desktop` file
+- assign on of the values shown by executing `xprop WM_CLASS` + mouse-click on window
