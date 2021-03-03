@@ -64,7 +64,7 @@ usage(){
 		!!! we <3 space-free file-paths !!!
 
 		VERSION
-		0.4.4
+		0.4.5
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -376,7 +376,8 @@ install_java(){
 	}
 
 	local url version
-	url="https://download.oracle.com/otn-pub/java/jdk/15.0.1%2B9/51f4f36ad4ef43e39d0dfdbaf6549e32/jdk-15.0.1_linux-x64_bin.tar.gz"
+	#url="https://download.oracle.com/otn-pub/java/jdk/15.0.1%2B9/51f4f36ad4ef43e39d0dfdbaf6549e32/jdk-15.0.1_linux-x64_bin.tar.gz"
+	url="https://download.oracle.com/otn-pub/java/jdk/15.0.2%2B7/0d1cfde4252546c6931946de8db48ee2/jdk-15.0.2_linux-x64_bin.tar.gz"
 	version=$(basename $url | sed -E 's/jdk-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz
 	rm -rf $version
@@ -1023,6 +1024,26 @@ install_shellcheck(){
 	mv shellcheck* $version
 	ln -sfnr $version latest
 	BIN=latest
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=mdless                # a ruby based terminal markdown viewer
+install_mdless(){
+	_cleanup::install_mdless(){
+		rm -f $TOOL.tar.gz
+	}
+
+	local url version
+
+	url='https://github.com/'$(curl -s https://github.com/ttscoff/mdless/releases | grep -oE 'ttscoff/mdless/\S+\/[0-9\.]+\.tar\.gz' | sort -Vr | head -1)
+	version=$(basename $url | sed -E 's/([0-9\.]+)\..+/\1/')
+	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.gz
+	tar -xzf $TOOL.tar.gz && rm -f $TOOL.tar.gz
+	mv mdless* $version
+	sed -i 's@require@$LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)\nrequire@' $version/bin/mdless
+	ln -sfnr $version latest
+	BIN=latest/bin
 	return 0
 }
 [[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
