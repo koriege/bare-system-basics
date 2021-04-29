@@ -35,7 +35,6 @@ printerr(){
 trap '
 	pids=($(pstree -p $$ | grep -Eo "\([0-9]+\)" | grep -Eo "[0-9]+" | tail -n +2))
 	{ kill -KILL "${pids[@]}" && wait "${pids[@]}"; } &> /dev/null
-	printf "\r"
 ' EXIT
 
 # must not be splitted into multiple lines to keep valid LINENO
@@ -64,7 +63,7 @@ usage(){
 		!!! we <3 space-free file-paths !!!
 
 		VERSION
-		0.4.5
+		0.4.6
 
 		SYNOPSIS
 		$(basename $0) -i [tool]
@@ -283,18 +282,17 @@ install_opera(){
 
 TOOL=firefox               # updates via interface possible. firefox webbrowser
 install_firefox(){
-	_cleanup::install_opera(){
+	_cleanup::install_firefox(){
 		rm -f $TOOL.tar.bz2
 	}
 
 	local url version
-	url='https://ftp.mozilla.org/pub/firefox/releases/'
-	version=$(curl -s $url | grep -oE 'releases/[0-9\.]+' | cut -d '/' -f 2 | sort -Vr | head -1)
-	url="$url$version/linux-x86_64/en-US/firefox-$version.tar.bz2"
+	url='https://download.mozilla.org/?product=firefox-latest&os=linux64&lang=en-US'
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2
-	rm -rf $version
 	tar -xjf $TOOL.tar.bz2 && rm -f $TOOL.tar.bz2
-	mv firefox* $version
+	version=$(firefox/firefox --version | awk '{print $NF}')
+	rm -rf $version
+	mv firefox $version
 	ln -sfnr $version latest
 	BIN=latest
 
@@ -318,13 +316,13 @@ install_thunderbird(){
 	}
 
 	local url version
-	url='https://ftp.mozilla.org/pub/thunderbird/releases/'
-	version=$(curl -s $url | grep -oE 'releases/[0-9\.]+' | cut -d '/' -f 2 | sort -Vr | head -1)
-	url="$url$version/linux-x86_64/en-US/thunderbird-$version.tar.bz2"
+	url='https://download.mozilla.org/?product=thunderbird-latest&os=linux64&lang=en-US'
+
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.tar.bz2
-	rm -rf $version
 	tar -xjf $TOOL.tar.bz2 && rm -f $TOOL.tar.bz2
-	mv thunderbird* $version
+	version=$(thunderbird/thunderbird --version | awk '{print $NF}')
+	rm -rf $version
+	mv thunderbird $version
 	ln -sfnr $version latest
 	BIN=latest
 
@@ -336,6 +334,62 @@ install_thunderbird(){
 		Type=Application
 		Icon=$DIR/$TOOL/$BIN/chrome/icons/default/default128.png
 		StartupWMClass=Thunderbird
+	EOF
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=slack                 # team communication
+install_slack(){
+	_cleanup::install_slack(){
+		rm -f $TOOL.deb
+	}
+
+	local url version
+	url=$(curl -s https://slack.com/intl/en-de/downloads/instructions/ubuntu | grep -oE '[^"]+\.deb')
+	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
+	version=$(usr/bin/slack --version)
+	rm -rf $version && mv usr $version && rm -rf etc
+	ln -sfnr $version latest
+	BIN=latest/zoom
+
+	cat <<- EOF > $HOME/.local/share/applications/my-slack.desktop
+		[Desktop Entry]
+		Terminal=false
+		Name=Slack
+		Exec=$DIR/$TOOL/$BIN/slack %U
+		Type=Application
+		Icon=$DIR/$TOOL/latest/share/pixmaps/slack.png
+		StartupWMClass=Slack
+	EOF
+	return 0
+}
+[[ ${OPT[all]} || ${OPT[$TOOL]} ]] && run install_$TOOL
+
+TOOL=zoom                  # video conferences
+install_zoom(){
+	_cleanup::install_zoom(){
+		rm -f $TOOL.deb
+	}
+
+	local url version
+	url='https://zoom.us/client/latest/zoom_amd64.deb'
+	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N $url -O $TOOL.deb
+	ar p $TOOL.deb data.tar.xz | tar xJ && rm -f $TOOL.deb
+	version=$(head -1 opt/zoom/version.txt)
+	rm -rf $version && mv usr/share opt && mv opt $version && rm -rf usr
+	ln -sfnr $version latest
+	BIN=latest/zoom
+
+	cat <<- EOF > $HOME/.local/share/applications/my-zoom.desktop
+		[Desktop Entry]
+		Terminal=false
+		Name=Zoom
+		Exec=$DIR/$TOOL/$BIN/ZoomLauncher %U
+		Type=Application
+		Icon=$DIR/$TOOL/latest/share/pixmaps/Zoom.png
+		StartupWMClass=zoom
 	EOF
 	return 0
 }
@@ -376,8 +430,9 @@ install_java(){
 	}
 
 	local url version
-	#url="https://download.oracle.com/otn-pub/java/jdk/15.0.1%2B9/51f4f36ad4ef43e39d0dfdbaf6549e32/jdk-15.0.1_linux-x64_bin.tar.gz"
-	url="https://download.oracle.com/otn-pub/java/jdk/15.0.2%2B7/0d1cfde4252546c6931946de8db48ee2/jdk-15.0.2_linux-x64_bin.tar.gz"
+	#url='https://download.oracle.com/otn-pub/java/jdk/15.0.1%2B9/51f4f36ad4ef43e39d0dfdbaf6549e32/jdk-15.0.1_linux-x64_bin.tar.gz'
+	#url='https://download.oracle.com/otn-pub/java/jdk/15.0.2%2B7/0d1cfde4252546c6931946de8db48ee2/jdk-15.0.2_linux-x64_bin.tar.gz'
+	url='https://download.oracle.com/otn-pub/java/jdk/16.0.1+9/7147401fd7354114ac51ef3e1328291f/jdk-16.0.1_linux-x64_bin.tar.gz'
 	version=$(basename $url | sed -E 's/jdk-([0-9\.]+).+/\1/')
 	wget -c -q --show-progress --progress=bar:force --waitretry 1 --tries 5 --retry-connrefused -N --no-cookies --no-check-certificate --header "Cookie: oraclelicense=accept-securebackup-cookie" $url -O $TOOL.tar.gz
 	rm -rf $version
