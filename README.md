@@ -47,6 +47,8 @@ source <installpath>/SOURCE.me
 | opera                 | chrome based webbrowser with vpn |
 | firefox               | updates via interface possible. firefox webbrowser |
 | thunderbird           | updates itself. thunderbird email tool - best until vivaldi m3 is released |
+| slack                 | team communication
+| zoom                  | video conferences
 | keeweb                | keepass db compatible password manager with cloud sync support |
 | java                  | oracle java runtime and development kit |
 | pdf-editor4           | master pdf viewer and editor v4 (latest without watermark) |
